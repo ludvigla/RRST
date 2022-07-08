@@ -1,0 +1,528 @@
+---
+title: "Figure 1"
+author: "Ludvig Larsson"
+date: '2022-05-23'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r}
+
+library(STutility)
+library(ggplot2)
+library(ggpubr)
+
+```
+
+
+Assemble spaceranger output files
+
+```{r}
+
+# Mouse brain
+samples1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/filtered_feature_bc_matrix.h5")
+imgs1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/tissue_hires_image.png")
+spotfiles1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/tissue_positions_list.csv")
+json1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/scalefactors_json.json")
+
+# Prostate cancer
+samples2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/filtered_feature_bc_matrix.h5")
+imgs2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/tissue_hires_image.png")
+spotfiles2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/tissue_positions_list.csv")
+json2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/scalefactors_json.json")
+
+infoTable <- data.frame(samples = c(samples1, samples2), imgs = c(imgs1, imgs2), spotfiles = c(spotfiles1, spotfiles2), json = c(json1, json2))
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
+
+curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx")
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
+                                                       "project", "experimenter", "processer", "comments",
+                                                       "ID", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
+
+# Exclude FFPE data
+infoTable <- subset(infoTable, !protocol %in% "FFPE")
+
+```
+
+
+
+Load mouse brain data
+
+```{r}
+
+MB_infoTable <- subset(infoTable, source == "degraded_MB")
+MB_infoTable <- subset(MB_infoTable, include == "yes")
+MB <- InputFromTable(infotable = MB_infoTable)
+
+```
+
+
+```{r}
+
+VlnPlot(MB, features = "nFeature_RNA", group.by = "arrayID", split.by = "protocol")
+
+```
+
+
+```{r}
+
+MB <- LoadImages(MB, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+Prepare data for image transformation.
+
+```{r}
+
+# Prepare data for rigid transformation
+st.object <- GetStaffli(MB)
+msks <- lapply(st.object@rasterlists$raw, function(im) {
+  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
+})
+st.object@rasterlists$masked <- st.object@rasterlists$raw
+st.object@rasterlists$masked.masks <- msks
+MB@tools$Staffli <- st.object
+
+```
+
+Apply transformations
+
+```{r}
+
+# Warp transform
+MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "2" = list(angle = -90), "3" = list(angle = 90), "4" = list(angle = 90),
+                                       "5" = list(angle = -90), "6" = list(angle = -90), "7" = list(angle = 90), "8" = list(angle = -90)))
+```
+
+Spatial plot
+
+```{r fig.width=8, fig.height=4}
+
+#p <- FeatureOverlay(MB, features = "nFeature_RNA", ncols = 2, sampleids = c(1, 5), cols = c("lightgray", "mistyrose", "red", "darkred"), 
+#                    label.by = "protocol", value.scale = "all", pt.size = 1.2, show.sb = FALSE) &
+#  theme(plot.title = element_blank(), legend.position = "top", legend.text = element_text(angle = 60, hjust = 1)) &
+#  labs(fill = "unique genes")
+
+MB$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[MB$protocol]
+
+p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), 
+                    label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
+  theme(plot.title = element_blank(), legend.position = "top", 
+        legend.text = element_text(angle = 60, hjust = 1, size = 10, colour = "black"),
+        legend.title = element_text(size = 15, colour = "black", vjust = 1),
+        strip.text = element_text(size = 14, face = "bold", colour = "black")) &
+  labs(fill = "unique genes")
+
+jpeg(filename = "mousebrain_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
+print(p)
+dev.off()
+
+```
+
+Violin plot
+
+```{r}
+
+p <- ggplot(MB[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
+  geom_violin(scale = "width") +
+  geom_boxplot(width = 0.3) +
+  geom_hline(data = MB[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
+             aes("", yintercept = Median, group = protocol), linetype = "longdash") +
+  geom_label(data = MB[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
+             aes("", y = Median, group = protocol, label = Median)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 10, colour = "black"), 
+        axis.text.y = element_text(size = 10, colour = "black"), 
+        strip.text = element_text(size = 13, face = "bold", colour = "black")) +
+  labs(y = "", x = "") +
+  facet_grid(~protocol, scales = "free") +
+  guides(fill = "none") +
+  scale_x_discrete(labels = c("", "Rep1", "Rep2", "Rep3", "Rep4"))
+
+jpeg(filename = "mousebrain_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
+print(p)
+dev.off()
+
+```
+
+Compare gene attributes
+
+```{r}
+
+gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
+  umis <- GetAssayData(MB, slot = "counts", assay = "RNA")[, MB$protocol %in% pro]
+  gene_attr_protocol <- data.frame(rowSums(umis), rowMeans(umis > 0), row.names = rownames(umis))
+  gene_attr_protocol <- setNames(gene_attr_protocol, nm = c(paste0(gsub(pattern = " ", replacement = "_", x = pro), "_count"), 
+                                                            paste0(gsub(pattern = " ", replacement = "_", x = pro), "_det_rate")))
+  return(gene_attr_protocol)
+}))
+
+gene_attr <- gene_attr %>%
+  mutate("RNA_rescue_log_count" = log1p(`RNA_rescue_count`), "standard_log_count" = log1p(`standard_count`))
+
+```
+
+```{r fig.width=8, fig.height=4}
+
+mouse_probes <- read.csv("../../sheets/Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv", skip = 5, header = TRUE)
+mouse_probes$gene_name <- do.call(rbind, strsplit(mouse_probes$probe_id, "\\|"))[, 2]
+
+p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% 
+               subset(gene %in% mouse_probes$gene_name), 
+             aes_string("standard_log_count", "RNA_rescue_log_count")) +
+  geom_point(size = 0.3) +
+  ggpubr::stat_cor(digits = 2) +
+  scale_x_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_y_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
+  labs(x = "standard protocol", y = "RRST", title = "log1p(UMI counts)") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+        plot.title = element_text(size = 14, face = "bold", colour = "black"))
+
+p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RNA_rescue_det_rate")) +
+  geom_point(size = 0.3) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
+  labs(x = "standard protocol", y = "RRST", title = "detection rate") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+        plot.title = element_text(size = 14, face = "bold", colour = "black"))
+
+p <- p1 + p2
+p
+
+jpeg(filename = "mousebrain_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
+print(p1)
+dev.off()
+jpeg(filename = "mousebrain_gene_scatter_det_rater.jpg", width = 1000, height = 1000, res = 300)
+print(p2)
+dev.off()
+
+```
+
+Check biotype content
+
+```{r fig.width=12, fig.height=9}
+
+library(ggbreak)
+
+gene_annotations <- read.table(file = "../../genes/mgenes.tsv", header = TRUE)
+rownames(gene_annotations) <- gene_annotations$gene_name
+
+# rename gene type for mitochondrial and ribosomal protein coding genes
+rp.genes <- grep(pattern = "^Rpl|^Rps", x = rownames(gene_attr), value = TRUE)
+mt.genes <- grep(pattern = "^mt-", x = rownames(gene_attr), value = TRUE)
+gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% rp.genes, "ribosomal\nprotein_coding", gene_annotations$gene_type)
+gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% mt.genes, "mitochondrial", gene_annotations$gene_type)
+
+gene_attr$gene_type <- gene_annotations[rownames(gene_attr), "gene_type"]
+gene_attr <- gene_attr %>%
+  mutate(observed_in = case_when(RNA_rescue_count > 0 & standard_count > 0 ~ "both",
+                                 RNA_rescue_count > 0 & standard_count == 0 ~ "RNA_rescue",
+                                 RNA_rescue_count == 0 & standard_count > 0 ~ "standard")) %>%
+  mutate(gene = rownames(.))
+
+lvls <- gene_attr %>% 
+           group_by(gene_type) %>% 
+           summarize(tot = sum(RNA_rescue_count + standard_count)) %>% 
+           arrange(-tot) %>% 
+           pull(gene_type)
+
+gene_attr_summarized <- gene_attr %>% 
+               reshape2::melt(measure.vars = c("RNA_rescue_count", "standard_count")) %>%
+               filter(value > 0) %>%
+               group_by(gene_type, variable) %>% 
+               summarize(totTranscript = n(), totCount = sum(value)) %>%
+               mutate(gene_type = factor(gene_type, levels = lvls), 
+                      variable = ifelse(variable == "RNA_rescue_count", "RR-seq", "standard"))
+
+gene_attr_prop <- gene_attr %>% 
+  group_by(gene_type, observed_in) %>%
+  summarize(Freq = n()) %>%
+  group_by(gene_type) %>%
+  mutate(prop = Freq/sum(Freq)) %>%
+  mutate(gene_type = factor(gene_type, levels = lvls))
+
+p1 <- ggplot(gene_attr_summarized,
+             aes(gene_type, totTranscript, fill = variable)) +
+  geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
+  scale_y_cut(breaks = 100, which = c(1, 2), scales = c(1, 2), space = 0.5) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
+  labs(y = "transcripts detected")
+p2 <- ggplot(gene_attr_prop, aes("", prop, fill = observed_in)) +
+  geom_bar(stat = "identity", color = "black") + 
+  coord_polar("y", start = 0) +
+  scale_fill_brewer(palette = "Spectral") +
+  facet_wrap(~gene_type, strip.position = "bottom", ncol = 10) +
+  theme_void() +
+  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm")))
+p3 <- ggplot(gene_attr_summarized,
+               aes(gene_type, totCount, fill = variable)) +
+  geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
+  scale_y_cut(breaks = 1e5, which = c(1, 2), scales = c(1, 2), space = 0.5) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
+  labs(y = "UMI count")
+
+
+jpeg("../Suppl_Figure_1/mousebrain_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p1)
+dev.off()
+jpeg("../Suppl_Figure_1/mousebrain_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p2)
+dev.off()
+jpeg("../Suppl_Figure_1/mousebrain_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p3)
+dev.off()
+
+```
+
+
+
+## Prostate cancer
+***
+
+Load prostate cancer data
+
+```{r}
+
+PC_infoTable <- subset(infoTable, source == "prostatecancer")
+PC_infoTable <- subset(PC_infoTable, include == "yes")
+PC <- InputFromTable(infotable = PC_infoTable[c(3:4, 1:2), ])
+
+```
+
+
+```{r}
+
+VlnPlot(PC, features = "nFeature_RNA", group.by = "arrayID", split.by = "protocol")
+
+```
+
+```{r}
+
+PC <- LoadImages(PC, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+
+```{r}
+
+# Prepare data for rigid transformation
+st.object <- GetStaffli(PC)
+msks <- lapply(st.object@rasterlists$raw, function(im) {
+  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
+})
+st.object@rasterlists$masked <- st.object@rasterlists$raw
+st.object@rasterlists$masked.masks <- msks
+PC@tools$Staffli <- st.object
+
+```
+
+Apply transformations
+
+```{r}
+
+# Warp transform
+PC <- WarpImages(PC, verbose = TRUE, transforms = list("1" = list(shift.y = -130), "3" = list(angle = 180)))
+```
+
+Spatial plot
+
+```{r fig.width=8, fig.height=4}
+
+#p <- FeatureOverlay(PC, features = "nFeature_RNA", ncols = 2, sampleids = c(2, 3), palette = "viridis", 
+#                    label.by = "protocol", value.scale = "all", pt.size = 1.2, show.sb = FALSE) &
+#  theme(plot.title = element_blank(), legend.position = "top", legend.text = element_text(angle = 60, hjust = 1)) &
+#  labs(fill = "unique genes")
+
+PC$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[PC$protocol]
+
+p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2), 
+                    label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
+  theme(plot.title = element_blank(), legend.position = "top", 
+        legend.text = element_text(angle = 60, hjust = 1, size = 10, colour = "black"),
+        legend.title = element_text(size = 15, colour = "black", vjust = 1),
+        strip.text = element_text(size = 14, face = "bold", colour = "black")) &
+  labs(fill = "unique genes")
+
+jpeg(filename = "prostatecancer_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
+print(p)
+dev.off()
+
+```
+
+Violin plot
+
+```{r}
+
+p <- ggplot(PC[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
+  geom_violin(scale = "width") +
+  geom_boxplot(width = 0.3) +
+  geom_hline(data = PC[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
+             aes("", yintercept = Median, group = protocol), linetype = "longdash") +
+  geom_label(data = PC[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
+             aes("", y = Median, group = protocol, label = Median)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        strip.text = element_text(size = 13, face = "bold", color = "black")) +
+  labs(y = "", x = "") +
+  facet_grid(~protocol, scales = "free") +
+  guides(fill = "none") +
+  scale_x_discrete(labels = c("", "Rep1", "Rep2"))
+
+jpeg(filename = "prostatecancer_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
+print(p)
+dev.off()
+
+```
+
+Compare gene attributes
+
+```{r}
+
+gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
+  umis <- GetAssayData(PC, slot = "counts", assay = "RNA")[, PC$protocol %in% pro]
+  gene_attr_protocol <- data.frame(rowSums(umis), rowMeans(umis > 0), row.names = rownames(umis))
+  gene_attr_protocol <- setNames(gene_attr_protocol, nm = c(paste0(gsub(pattern = " ", replacement = "_", x = pro), "_count"), 
+                                                            paste0(gsub(pattern = " ", replacement = "_", x = pro), "_det_rate")))
+  return(gene_attr_protocol)
+}))
+
+gene_attr <- gene_attr %>%
+  mutate("RNA_rescue_log_count" = log1p(`RNA_rescue_count`), "standard_log_count" = log1p(`standard_count`))
+
+```
+
+```{r fig.width=8, fig.height=4}
+
+human_probes <- read.csv("../../sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
+human_probes$gene_name <- do.call(rbind, strsplit(human_probes$probe_id, "\\|"))[, 2]
+
+p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% subset(gene %in% human_probes$gene_name), aes_string("standard_log_count", "RNA_rescue_log_count")) +
+  geom_point(size = 0.3) +
+  ggpubr::stat_cor() +
+  scale_x_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_y_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
+  labs(x = "standard protocol", y = "RRST", title = "log1p(UMI counts)") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+        plot.title = element_text(size = 14, face = "bold", colour = "black"))
+
+p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RNA_rescue_det_rate")) +
+  geom_point(size = 0.3) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
+  labs(x = "standard protocol", y = "RRST", title = "detection rate") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+        plot.title = element_text(size = 14, face = "bold", colour = "black"))
+
+p <- p1 | p2
+p
+
+jpeg(filename = "prostatecancer_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
+print(p1)
+dev.off()
+jpeg(filename = "prostatecancer_gene_scatter_det_rate.jpg", width = 1000, height = 1000, res = 300)
+print(p2)
+dev.off()
+
+```
+
+Check biotype content
+
+```{r fig.width=12, fig.height=9}
+
+library(ggbreak)
+
+gene_annotations <- read.table(file = "../../genes/hgenes.tsv", header = TRUE)
+rownames(gene_annotations) <- gene_annotations$gene_name
+
+# rename gene type for mitochondrial and ribosomal protein coding genes
+rp.genes <- grep(pattern = "^RPL|^RPS", x = rownames(gene_attr), value = TRUE)
+mt.genes <- grep(pattern = "^MT-", x = rownames(gene_attr), value = TRUE)
+gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% rp.genes, "ribosomal\nprotein_coding", gene_annotations$gene_type)
+gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% mt.genes, "mitochondrial", gene_annotations$gene_type)
+
+gene_attr$gene_type <- gene_annotations[rownames(gene_attr), "gene_type"]
+gene_attr <- gene_attr %>%
+  mutate(observed_in = case_when(RNA_rescue_count > 0 & standard_count > 0 ~ "both",
+                                 RNA_rescue_count > 0 & standard_count == 0 ~ "RNA_rescue",
+                                 RNA_rescue_count == 0 & standard_count > 0 ~ "standard")) %>%
+  mutate(gene = rownames(.))
+
+gene_attr <- subset(gene_attr, !gene_type %in% c("IG_C_pseudogene", "TR_V_pseudogene"))
+
+lvls <- gene_attr %>% 
+           group_by(gene_type) %>% 
+           summarize(tot = sum(RNA_rescue_count + standard_count)) %>% 
+           arrange(-tot) %>% 
+           pull(gene_type)
+
+gene_attr_summarized <- gene_attr %>% 
+               reshape2::melt(measure.vars = c("RNA_rescue_count", "standard_count")) %>%
+               filter(value > 0) %>%
+               group_by(gene_type, variable) %>% 
+               summarize(totTranscript = n(), totCount = sum(value)) %>%
+               mutate(gene_type = factor(gene_type, levels = lvls), 
+                      variable = ifelse(variable == "RNA_rescue_count", "RR-seq", "standard"))
+
+gene_attr_prop <- gene_attr %>% 
+  group_by(gene_type, observed_in) %>%
+  summarize(Freq = n()) %>%
+  group_by(gene_type) %>%
+  mutate(prop = Freq/sum(Freq)) %>%
+  mutate(gene_type = factor(gene_type, levels = lvls))
+
+p1 <- ggplot(gene_attr_summarized,
+             aes(gene_type, totTranscript, fill = variable)) +
+  geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
+  scale_y_cut(breaks = 100, which = c(1, 2), scales = c(1, 2), space = 0.5) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
+  labs(y = "transcripts detected")
+p2 <- ggplot(gene_attr_prop, aes("", prop, fill = observed_in)) +
+  geom_bar(stat = "identity", color = "black") + 
+  coord_polar("y", start = 0) +
+  scale_fill_brewer(palette = "Spectral") +
+  facet_wrap(~gene_type, strip.position = "bottom", ncol = 10) +
+  theme_void() +
+  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm")))
+p3 <- ggplot(gene_attr_summarized,
+               aes(gene_type, totCount, fill = variable)) +
+  geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
+  scale_y_cut(breaks = 1e5, which = c(1, 2), scales = c(1, 2), space = 0.5) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
+  labs(y = "UMI count")
+
+
+jpeg("../Suppl_Figure_1/prostatecancer_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p1)
+dev.off()
+jpeg("../Suppl_Figure_1/prostatecancer_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p2)
+dev.off()
+jpeg("../Suppl_Figure_1/prostatecancer_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
+print(p3)
+dev.off()
+
+```

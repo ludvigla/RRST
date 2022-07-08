@@ -1,0 +1,534 @@
+---
+title: "Figure 4"
+author: "Ludvig Larsson"
+date: '2022-07-04'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r eval=FALSE}
+
+library(STutility)
+library(ggplot2)
+library(ggpubr)
+
+```
+
+Assemble spaceranger output files and merge curated meta data
+
+```{r eval=FALSE}
+
+# Mouse brain
+samples <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/filtered_feature_bc_matrix.h5")
+imgs <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/tissue_hires_image.png")
+spotfiles <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/tissue_positions_list.csv")
+json <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/scalefactors_json.json")
+
+infoTable <- data.frame(samples, imgs, spotfiles, json)
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
+
+curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
+                                                       "project", "experimenter", "processer", "comments",
+                                                       "ID", "paper_id", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
+
+```
+
+Load data into a Seurat object
+
+
+```{r eval=FALSE}
+
+SI <- InputFromTable(infoTable %>% arrange(seq_date))
+
+```
+
+```{r eval=FALSE, fig.width=10, fig.height=12}
+
+SI$protocol_array <- paste0(SI$protocol, " : ", SI$arrayID)
+ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_array", show.sb = FALSE, pt.size = 1.5)
+
+```
+
+Load images
+
+```{r eval=FALSE}
+
+SI <- LoadImages(SI, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+Add empty masks for downstream processing of HE images
+
+```{r eval=FALSE}
+
+# Prepare data for rigid transformation
+st.object <- GetStaffli(SI)
+msks <- lapply(st.object@rasterlists$raw, function(im) {
+  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
+})
+st.object@rasterlists$masked <- st.object@rasterlists$raw
+st.object@rasterlists$masked.masks <- msks
+SI@tools$Staffli <- st.object
+
+```
+
+Apply transformations
+
+```{r eval=FALSE}
+
+# Warp transform
+SI <- WarpImages(SI, verbose = TRUE, transforms = list("3" = list(angle = -90), "4" = list(angle = -90), 
+                                                         "5" = list(angle = 160), "6" = list(angle = 160),
+                                                         "7" = list(angle = 20), "8" = list(angle = 20),
+                                                         "9" = list(angle = 20), "10" = list(angle = 20),
+                                                         "11" = list(angle = 20), "12" = list(angle = 20),
+                                                         "13" = list(angle = -140), "14" = list(angle = 30)))
+
+```
+
+Add a new metadata column with a combined protocol and lung ID label
+
+```{r eval=FALSE, fig.width=10, fig.height=10}
+
+SI$protocol_lng <- gsub(pattern = " ", replacement = "_", paste0(SI$protocol, "_ID: ", SI$paper_id))
+ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_lng")
+
+```
+
+Add manual annotations
+
+```{r eval=FALSE}
+
+SI <- ManualAnnotation(SI, type = "raw")
+
+```
+
+```{r include=FALSE, eval=FALSE}
+# Export selections
+
+#saveRDS(SI@meta.data, file = "../R_objects/SI_metadata_selections")
+meta.data <- readRDS("../R_objects/SI_metadata_selections")
+meta.data <- meta.data[colnames(SI), ]
+SI@meta.data$labels <- meta.data$labels
+SI@meta.data$labels[is.na(SI@meta.data$labels)] <- "background"
+
+submucosa_13 <- rownames(subset(SI@meta.data, arrayID == "V10S29-108_A1" & labels == "background"))
+SI@meta.data[submucosa_13, "labels"] <- "submucosa"
+
+```
+
+```{r fig.width=12, fig.height=10}
+
+ST.FeaturePlot(SI, features = "labels", ncol = 4)
+
+```
+
+
+
+### Filter out background and serosa
+***
+
+```{r eval=FALSE}
+
+SI <- SubsetSTData(SI, expression = labels %in% c("mucosa", "submucosa", "muscularis", "TLS", "serosa"))
+
+```
+
+
+### Biotype content
+***
+
+```{r}
+
+ensids <- read.table("../../genes/hgenes.tsv", header = T)
+rownames(ensids) <- ensids$gene_name
+
+ensids$gene_type[grep(pattern = "^MT-", x = ensids$gene_name)] <- "mt_protein_coding"
+ensids$gene_type[grep(pattern = "^RPL|^RPS", x = ensids$gene_name)] <- "rb_protein_coding"
+
+```
+
+
+```{r}
+
+SI$time <- SI[[]] %>%
+  mutate(time = factor(case_when(seq_date == "200323" ~ "~ 1 month",
+                          seq_date == "200923" ~ "~ 6 months",
+                          seq_date %in% c("220404", "220506") ~ "~ 2 years"), 
+                       levels = c("~ 1 month", "~ 6 months", "~ 2 years"))) %>% # ifelse(SI$seq_date %in% c("220404", "220506"), "220404-220506", SI$seq_date)
+  pull(time)
+
+gene_attr <- do.call(rbind, lapply(levels(SI$time), function(i) {
+  x <- rowSums(GetAssayData(SI, slot = "counts", assay = "RNA")[, SI$time == i])
+  data.frame(gene = names(x), count = x, gene_type = ensids[names(x), "gene_type"], time = i)
+}))
+
+gene_attr <- gene_attr %>% group_by(time, gene_type) %>% summarize(N = sum(count)) %>% group_by(time) %>% mutate(p = N/sum(N)) %>%
+  mutate(gene_type = factor(ifelse(gene_type %in% c("IG_C_gene", "IG_J_gene", "IG_V_gene",
+                          "TR_C_gene", "TR_J_gene", "TR_V_gene",
+                          "lncRNA", "protein_coding", "rb_protein_coding",
+                          "mt_protein_coding"), gene_type, "other"), levels = 
+                            c("protein_coding", "rb_protein_coding",
+                          "mt_protein_coding", "lncRNA", "IG_C_gene", "IG_J_gene", "IG_V_gene",
+                          "TR_C_gene", "TR_J_gene", "TR_V_gene", "other")))
+gene_attr$time <- factor(gene_attr$time, levels = c("~ 1 month", "~ 6 months", "~ 2 years"))
+
+cols <- c("#332288", "#6699CC", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#661100", "#CC6677", "#882255", "#AA4499")
+p <- ggplot(gene_attr, aes(x = "", y = p, fill = gene_type)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) +
+  facet_wrap(~ time, ncol = 2) +
+  theme(panel.background = element_rect(fill = "white"), 
+        axis.ticks = element_blank(), axis.text.x = element_blank(),
+        strip.text = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"), 
+        legend.position = c(0.8, 0.3)) +
+  labs(x = "", y = "", fill = "") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = cols)
+
+pdf(file = "biotype_content.pdf", width = 6, height = 6)
+print(p)
+dev.off()
+
+```
+
+### Plot H&E
+***
+
+```{r}
+
+png(filename = "HE.png", width = 860 - 95, height = 883 - 116)
+#95, 116, 860, 883
+par(mar = c(0,0,0,0))
+plot(SI@tools$Staffli@rasterlists$raw$`2`[116:883, 95:860])
+dev.off()
+
+```
+
+### Plot annotation
+***
+
+```{r}
+  
+gg <- cbind(SI[[]], GetStaffli(SI)@meta.data)
+gg <- subset(gg, sample == "2")
+dims <- GetStaffli(SI)@dims[["2"]]
+
+limits_list <- list("2" = c(x_start = 95*2, y_start = 116*2, x_end = 860*2, y_end = 883*2))
+
+p <- ggplot(gg, aes(warped_x, dims$height - warped_y, color = labels)) +
+  geom_point(size = 1.7) +
+  theme_void() +
+  scale_color_manual(values = c("mucosa" = "#AA4499", "submucosa" = "#DDCC77", "muscularis" = "#CC6677", "TLS" = "#77AADD", "serosa" = "#771155")) +
+  scale_x_continuous(expand = c(0, 0), limits = c(limits_list[["2"]]["x_start"], 
+                                limits_list[["2"]]["x_end"])) +
+  scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[["2"]]["y_end"], 
+                                dims$height - limits_list[["2"]]["y_start"])) +
+  theme(legend.position = "none")
+
+p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+
+
+png(filename = "annotations.png", width = (860 - 95)*2, height = (883 - 116)*2, res = 300)
+print(p)
+dev.off()
+
+```
+
+
+### Add new date column
+***
+
+```{r fig.width=12, fig.height=8}
+  
+p <- ggplot() + 
+  geom_violin(data = SI[[]], 
+              aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") + 
+  geom_hline(data = SI[[]] %>% group_by(protocol, time, labels) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), 
+             aes(yintercept = Mean), linetype = "longdash") +
+  geom_label(data = SI[[]] %>% group_by(protocol, time, labels) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), 
+             aes("A", Mean, label = Mean), size = 5) +
+  facet_grid(labels ~ time, scales = "free", space = "free") +
+  scale_x_discrete(labels = c("", "Rep1", "Rep2", "Rep3", "Rep4", "Rep5", "Rep6", "Rep7", "Rep8")) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = "Pastel2") +
+  labs(x = "", y = "") +
+  theme(panel.background = element_rect(fill = "white"), panel.grid = element_line(colour = "lightgray", size = 0.5), 
+        strip.text = element_text(size = 14, colour = "black"), 
+        axis.text = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 16, colour = "black"), 
+        legend.position = "bottom")
+
+pdf(file = "unique_genes_overview.pdf", width = 14, height = 10)
+print(p)
+dev.off()
+
+```
+
+
+### Export annotations (Suppl?)
+***
+
+```{r fig.width=14, fig.height=4}
+
+
+infoTable[, 1]
+
+limits_list <- list("1" = c(x_start = 260, y_start = 500, x_end = 1600, y_end = 1800),
+                    "5" = c(x_start = 170, y_start = 340, x_end = 1400, y_end = 1500),
+                    "13" = c(x_start = 130, y_start = 240, x_end = 1780, y_end = 1560))
+
+ann_plots <- lapply(c("1", "5", "13"), function(i) {
+  
+  gg <- cbind(SI[[]], GetStaffli(SI)@meta.data)
+  gg <- subset(gg, sample == i)
+  dims <- GetStaffli(SI)@dims[[i]]
+  
+  p <- ggplot(gg, aes(warped_x, dims$height - warped_y, color = labels)) +
+    geom_point(size = 1) +
+    theme_void() +
+    scale_color_manual(values = c("mucosa" = "#AA4499", "submucosa" = "#DDCC77", "muscularis" = "#CC6677", 
+                                  "TLS" = "#77AADD", "serosa" = "#771155")) +
+    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], 
+                                  limits_list[[i]]["x_end"])) +
+    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], 
+                                  dims$height - limits_list[[i]]["y_start"])) +
+    theme(legend.position = "none")
+
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+  return(p)
+})
+
+# HE images
+plots_HE <- lapply(c("2", "3", "4", "6"), function(i) {
+  im <- GetStaffli(CLN)@rasterlists$processed[[paste0(i)]]
+  dims <- GetStaffli(CLN)@dims[[i]]
+   
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*0.5, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*0.5]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    theme_void() +
+    theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0))
+  return(p)
+})
+
+
+```
+
+
+# Analysis
+***
+
+```{r}
+
+SISplit <- lapply(levels(SI$time), function(i) {
+  cat(sprintf("Started processing data set %s", i), "\n")
+  SIs <- SubsetSTData(SI, expression = nFeature_RNA > 100)
+  SIs <- SubsetSTData(SIs, expression = time %in% i)
+  SIs <- SIs %>% 
+    NormalizeData() %>% 
+    ScaleData() %>% 
+    FindVariableFeatures() %>%
+    RunPCA() %>%
+    RunHarmony(group.by.vars = "arrayID", reduction = "pca", dims.use = 1:20) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:20) %>%
+    FindClusters() %>%
+    RunUMAP(reduction = "harmony", dims = 1:20)
+  SIs <- SetIdent(SIs, value = "labels")
+  return(SIs)
+})
+
+```
+
+```{r fig.width=6, fig.height=5}
+
+DimPlot(SISplit[[3]], group.by = "seurat_clusters") +
+DimPlot(SISplit[[3]], group.by = "arrayID") +
+  DimPlot(SISplit[[3]]) +
+  patchwork::plot_layout(nrow = 2)
+
+```
+
+
+DE test
+
+```{r}
+
+de.markers.list <- lapply(SISplit, function(se) {
+  de.markers <- FindMarkers(se, only.pos = TRUE, max.cells.per.ident = 1000, ident.1 = "mucosa") %>% filter(p_val_adj < 0.01)
+  de.markers$gene <- rownames(de.markers)
+  de.markers$time <- unique(se$time)
+  return(de.markers)
+})
+
+```
+
+
+
+```{r}
+
+de.markers <- do.call(rbind, de.markers.list)
+
+expressionInput <- de.markers %>% group_by(gene) %>%
+  summarize(group = paste0(time, collapse = "&")) %>%
+  group_by(group) %>%
+  summarize(N = n()) %>%
+  arrange(-N)
+expressionInput <-  setNames(expressionInput$N, nm =  expressionInput$group)
+
+p <- upset(fromExpression(expressionInput), order.by = "freq")
+
+pdf(file = "upset_DE.pdf", width = 6, height = 3)
+print(p)
+dev.off()
+
+```
+
+```{r}
+
+SI <- NormalizeData(SI)
+
+enterocyte.markers <- c("ANPEP", "RBP2", "DGAT1", "FABP2", "APOB")
+gg <- cbind(SI[[]], GetStaffli(SI)@meta.data, FetchData(object = SI, vars = enterocyte.markers)) %>%
+  reshape::melt(measure.vars = enterocyte.markers) %>%
+  select(arrayID, time, warped_x, warped_y, sample, variable, value)
+
+plots <- lapply(enterocyte.markers, function(i) {
+  subset(gg, variable == i) %>%
+  subset(sample %in% c("2", "5", "13")) %>%
+    ggplot(aes(warped_x, warped_y, color = value)) +
+      geom_point(size = 0.3) +
+      theme_void() +
+      facet_grid(time ~ .) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_reverse(expand = c(0, 0)) +
+      scale_color_gradientn(colours = viridis::magma(n = 11, direction = -1)) +
+      labs(title = i) +
+      theme(legend.position = "top", 
+            strip.text = element_blank()) -> p
+  ggrastr::rasterize(p, layers = "Point", dpi = 300)
+})
+
+p <- cowplot::plot_grid(plotlist = plots, nrow = 1)
+
+pdf(file = "markes_spatial_enterocytes.pdf", width = 12, height = 8)
+print(p)
+dev.off()
+
+```
+Export H&E images
+
+```{r}
+
+for (i in c("2", "5", "13")) {
+  im <- SI@tools$Staffli@rasterlists$processed[[i]]
+  png(filename = paste0("HE_", i, ".png"), width = ncol(im), height = nrow(im), res = 300)
+  par(mar = c(0,0,0,0))
+  plot(im)
+  dev.off()
+}
+
+```
+
+
+```{r}
+
+de.markers %>% mutate(Freq = as.numeric(table(gene)[gene])) %>%
+  filter(Freq == 3) %>%
+  group_by(gene) %>%
+  summarize(Mean = mean(avg_log2FC)) %>%
+  arrange(-Mean)
+
+```
+
+Scale data
+
+```{r fig.width=6, fig.height=2}
+
+SI <- NormalizeData(SI)
+SI <- ScaleData(SI, features = de.markers$gene[1:10])
+DotPlot(SI, features = de.markers$gene[1:10])
+
+gg <- cbind(SI[[]], FetchData(SI, vars = de.markers$gene[1:10], slot = "data")) %>% 
+  reshape2::melt(measure.vars = de.markers$gene[1:10]) %>%
+  group_by(variable, labels) %>%
+  summarize(Mean = mean(value), pct = sum(value > 0)/n())
+
+ggplot(gg, aes(variable, labels, color = Mean, size = pct)) +
+  geom_point() +
+  #facet_grid(~time) +
+  scale_color_gradientn(colours = viridis::magma(n = 11, direction = -1))
+
+```
+
+DE test by region
+
+```{r fig.width=8, fig.height=3}
+
+region.markers <- FindAllMarkers(SI, only.pos = TRUE)
+selected.markers <- region.markers %>% group_by(cluster) %>% slice_head(n = 10) %>% pull(gene)
+
+SI <- ScaleData(SI, features = selected.markers)
+DotPlot(SI, features = selected.markers, split.by = "time", cols = c("red", "orange", "blue"), dot.scale = 7)
+
+```
+
+
+Gene ontology
+
+```{r}
+
+SI$mucosa_bg <- ifelse(SI$labels == "mucosa", "mucosa", "bg")
+
+ST.FeaturePlot(SI, features = "mucosa_bg", indices = c(2, 9, 13), cols = c("mucosa" = "red", "bg" = "lightgray")) &
+  theme(strip.text = element_blank())
+
+```
+
+
+
+```{r}
+
+DotPlot(SI, features = de.markers$gene[1:10])
+
+```
+
+
+
+
+
+
+# date
+***
+
+```{r eval=FALSE}
+date()
+```
+
+# Session
+***
+
+```{r eval=FALSE}
+devtools::session_info()
+```

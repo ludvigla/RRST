@@ -263,22 +263,32 @@ p1 <- ggplot(gene_attr_summarized,
   geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
   scale_y_cut(breaks = 100, which = c(1, 2), scales = c(1, 2), space = 0.5) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
-  labs(y = "transcripts detected")
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), 
+        axis.text.y = element_text(size = 12, colour = "black"), 
+        axis.title = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black")) +
+  labs(y = "transcripts detected", fill = "")
 p2 <- ggplot(gene_attr_prop, aes("", prop, fill = observed_in)) +
   geom_bar(stat = "identity", color = "black") + 
   coord_polar("y", start = 0) +
   scale_fill_brewer(palette = "Spectral") +
   facet_wrap(~gene_type, strip.position = "bottom", ncol = 10) +
   theme_void() +
-  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm")))
+  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm"), colour = "black", size = 12), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black"))
 p3 <- ggplot(gene_attr_summarized,
                aes(gene_type, totCount, fill = variable)) +
   geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
   scale_y_cut(breaks = 1e5, which = c(1, 2), scales = c(1, 2), space = 0.5) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
-  labs(y = "UMI count")
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), 
+        axis.text.y = element_text(size = 12, colour = "black"), 
+        axis.title = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black")) +
+  labs(y = "UMI count", fill = "")
 
 
 jpeg("../Suppl_Figure_1/mousebrain_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
@@ -497,22 +507,32 @@ p1 <- ggplot(gene_attr_summarized,
   geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
   scale_y_cut(breaks = 100, which = c(1, 2), scales = c(1, 2), space = 0.5) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
-  labs(y = "transcripts detected")
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), 
+        axis.text.y = element_text(size = 12, colour = "black"), 
+        axis.title = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black")) +
+  labs(y = "transcripts detected", fill = "")
 p2 <- ggplot(gene_attr_prop, aes("", prop, fill = observed_in)) +
   geom_bar(stat = "identity", color = "black") + 
   coord_polar("y", start = 0) +
   scale_fill_brewer(palette = "Spectral") +
   facet_wrap(~gene_type, strip.position = "bottom", ncol = 10) +
   theme_void() +
-  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm")))
+  theme(strip.text = element_text(angle = 90, vjust = 0.5, hjust = 1, margin = margin(0.2, 0, 0.2, 0, "cm"), colour = "black", size = 12), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black"))
 p3 <- ggplot(gene_attr_summarized,
                aes(gene_type, totCount, fill = variable)) +
   geom_bar(stat = "identity", position = position_dodge(preserve = 'single')) +
   scale_y_cut(breaks = 1e5, which = c(1, 2), scales = c(1, 2), space = 0.5) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.title.x = element_blank()) +
-  labs(y = "UMI count")
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), 
+        axis.text.y = element_text(size = 12, colour = "black"), 
+        axis.title = element_text(size = 14, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 14, colour = "black")) +
+  labs(y = "UMI count", fill = "")
 
 
 jpeg("../Suppl_Figure_1/prostatecancer_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)

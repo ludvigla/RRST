@@ -101,8 +101,8 @@ Add a new metadata column with a combined protocol and lung ID label
 
 ```{r eval=FALSE}
 
-CLN$protocol_lng <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$paper_id))
-ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_lng")
+CLN$protocol_sample <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$paper_id))
+ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_sample")
 
 ```
 

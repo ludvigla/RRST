@@ -133,9 +133,10 @@ SI@meta.data[submucosa_13, "labels"] <- "submucosa"
 
 ```
 
+
 ```{r fig.width=12, fig.height=10}
 
-ST.FeaturePlot(SI, features = "labels", ncol = 4)
+ST.FeaturePlot(SI, features = "labels", ncol = 4, label.by = "time")
 
 ```
 
@@ -208,6 +209,46 @@ print(p)
 dev.off()
 
 ```
+
+### Supplementary figure
+***
+
+```{r}
+
+plots_HE <- lapply(paste0(1:14), function(i) {
+  im <- GetStaffli(SI)@rasterlists$processed[[i]]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    theme_void() +
+    theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0))
+})
+
+labels_plot <- lapply(1:14, function(i) {
+  p <- ST.FeaturePlot(SI, features = "labels", indices = i, show.sb = FALSE, pt.size = 0.7,
+                 cols = c("mucosa" = "#AA4499", "submucosa" = "#DDCC77", "muscularis" = "#CC6677", "TLS" = "#77AADD", "serosa" = "#771155")) & 
+    theme(plot.title = element_blank(), legend.position = "none", strip.text = element_blank())
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+})
+
+plots <- lapply(1:14, function(i) {
+  p <- plots_HE[[i]] | labels_plot[[i]]
+  return(p)
+})
+
+p1 <- cowplot::plot_grid(plotlist = plots[c(1:4, 13:14)], ncol = 1)
+p2 <- cowplot::plot_grid(plotlist = c(plots[5:8], list(NULL, NULL)), ncol = 1)
+p3 <- cowplot::plot_grid(plotlist = c(plots[9:12], list(NULL, NULL)), ncol = 1)
+
+p <- p1 + p2 + p3 + patchwork::plot_layout(ncol = 3)
+
+pdf(file = "suppl_figure_HE_and_labels.pdf", width = 10, height = 10)
+print(p)
+dev.off()
+
+```
+
+
 
 ### Plot H&E
 ***

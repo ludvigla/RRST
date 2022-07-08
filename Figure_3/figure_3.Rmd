@@ -135,7 +135,7 @@ CLN <- SubsetSTData(CLN, expression = labels %in% c("mucosa", "submucosa", "musc
 ### Export annotations
 ***
 
-```{r fig.width=14, fig.height=4}
+```{r fig.width=14, fig.height=4, eval=FALSE}
 
 
 infoTable[c(5:6, 2, 4, 1, 3), 1]
@@ -210,7 +210,7 @@ dev.off()
 ### Plot QC by region
 ***
 
-```{r fig.width=14, fig.height=5}
+```{r fig.width=14, fig.height=5, eval=FALSE}
 
 th <- theme(panel.background = element_rect(fill = "white", colour = "lightgray"), 
           panel.grid = element_line(colour = "lightgray", linetype = "longdash"), 
@@ -269,7 +269,7 @@ dev.off()
 
 ```
 
-```{r fig.width=12, fig.height=3}
+```{r fig.width=12, fig.height=3, eval=FALSE}
 
 CLN$unique_genes_log10 <- log10(CLN$nFeature_RNA)
 CLN$UMIs_log10 <- log10(CLN$nCount_RNA)
@@ -317,7 +317,7 @@ dev.off()
 
 Filter data
 
-```{r}
+```{r eval=FALSE}
 
 umis_standard <- rownames(CLN)[rowSums(GetAssayData(CLN, slot = "counts")[, CLN$protocol == "standard"]) > 0]
 umis_RRST <- rownames(CLN)[rowSums(GetAssayData(CLN, slot = "counts")[, CLN$protocol == "RNA rescue"]) > 0]
@@ -326,7 +326,7 @@ genes.keep <- intersect(umis_standard, umis_RRST)
 
 ```
 
-```{r}
+```{r eval=FALSE}
 
 CLN.subset <- SubsetSTData(CLN, features = genes.keep)
 library(harmony)
@@ -343,14 +343,14 @@ CLN.subset <- CLN.subset %>%
 ```
 
 
-```{r}
+```{r eval=FALSE}
 
 DimPlot(CLN.subset)
 
 ```
 
 
-```{r fig.width=8, fig.height=4}
+```{r fig.width=8, fig.height=4, eval=FALSE}
 
 selected.genes <- c("CLDN3", "CLDN4", "CLDN7", "FABP1", "SLC26A2", "SLC26A3", "MS4A12", "SLC26A3", "CEACAM7", "AQP8", "KRT20", "PIGR")
 gg <- cbind(CLN.subset[[]], FetchData(CLN.subset, vars = selected.genes)) %>%
@@ -389,17 +389,16 @@ dev.off()
 ```
 
 
-
 # date
 ***
 
-```{r eval=FALSE}
+```{r}
 date()
 ```
 
 # Session
 ***
 
-```{r eval=FALSE}
+```{r}
 devtools::session_info()
 ```

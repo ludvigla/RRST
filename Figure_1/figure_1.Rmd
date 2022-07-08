@@ -113,11 +113,6 @@ Spatial plot
 
 ```{r fig.width=8, fig.height=4}
 
-#p <- FeatureOverlay(MB, features = "nFeature_RNA", ncols = 2, sampleids = c(1, 5), cols = c("lightgray", "mistyrose", "red", "darkred"), 
-#                    label.by = "protocol", value.scale = "all", pt.size = 1.2, show.sb = FALSE) &
-#  theme(plot.title = element_blank(), legend.position = "top", legend.text = element_text(angle = 60, hjust = 1)) &
-#  labs(fill = "unique genes")
-
 MB$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[MB$protocol]
 
 p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), 
@@ -457,9 +452,10 @@ dev.off()
 
 ```
 
-Check biotype content
+### Supplementary figure
+***
 
-```{r fig.width=12, fig.height=9}
+```{r eval=FALSE}
 
 library(ggbreak)
 

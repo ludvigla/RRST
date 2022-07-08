@@ -474,6 +474,7 @@ dev.off()</code></pre>
 <h3>Filter data</h3>
 <hr />
 <pre class="r"><code>LNG$filter &lt;- ifelse(LNG$nFeature_RNA &lt; 300, &quot;discard&quot;, &quot;keep&quot;)
+
 LNG.subset &lt;- SubsetSTData(LNG, expression = nFeature_RNA &gt; 300)</code></pre>
 <p>Now we can see that quite a few spots have been discarded, in
 particular for the standard Visium data for ID 2.</p>
@@ -497,7 +498,7 @@ particular for the standard Visium data for ID 2.</p>
 <li>Find clusters using Louvain algorithm</li>
 <li>Create a UMAP using the first 20 PCs as input</li>
 </ol>
-<pre class="r"><code>LNGList &lt;- lapply(LNGList, function(LNG) {
+<pre class="r"><code>LNGList &lt;- lapply(LNGList, function(LNG.subset) {
   LNG.subset &lt;- LNG.subset %&gt;%
     NormalizeData() %&gt;%
     ScaleData() %&gt;%
@@ -531,6 +532,22 @@ de.markers.list.025 &lt;- lapply(de.markers.list.025, function(de.markers) {
 de.markers.list &lt;- lapply(de.markers.list.025, function(de.markers) {
   de.markers %&gt;% dplyr::filter(avg_log2FC &gt; 0.5)
 })</code></pre>
+<div id="add-cluster-annotations" class="section level3">
+<h3>Add cluster annotations</h3>
+<hr />
+<pre class="r"><code># sRR-seq cluster annotations
+ann1 &lt;- c(&quot;0&quot; = &quot;AT1-enriched&quot;, &quot;1&quot; = &quot;Macrophage-enriched&quot;,
+         &quot;2&quot; = &quot;AT2-enriched&quot;, &quot;3&quot; = &quot;Connective tissue 1&quot;, 
+         &quot;4&quot; = &quot;Connective tissue 2&quot;, &quot;5&quot; = &quot;Connective tissue 3&quot;,
+         &quot;6&quot; = &quot;Airway epithelium&quot;, &quot;7&quot; = &quot;Megakaryocyte-enriched&quot;,
+         &quot;8&quot; = &quot;Smooth muscle&quot;, &quot;9&quot; = &quot;Immune-enriched&quot;, 
+         &quot;10&quot; = &quot;Glands&quot;)
+ann3 &lt;- c(&quot;0&quot; = &quot;AT2-enriched&quot;, &quot;1&quot; = &quot;Low-quality cluster 1&quot;,
+          &quot;2&quot; = &quot;Connective tissue 1&quot;, &quot;3&quot; = &quot;Connective tissue 2&quot;,
+          &quot;4&quot; = &quot;Low-quality cluster 2&quot;, &quot;5&quot; = &quot;Connective tissue 3&quot;,
+          &quot;6&quot; = &quot;Glands&quot;, &quot;7&quot; = &quot;Megakaryocyte-enriched&quot;, 
+          &quot;8&quot; = &quot;Airway epithelium&quot;)</code></pre>
+</div>
 <div id="create-plots-for-figure-2" class="section level3">
 <h3>Create plots for figure 2</h3>
 <hr />
@@ -556,7 +573,7 @@ plots_vln &lt;- lapply(1:4, function(i) {
     theme_classic() +
     facet_wrap(~variable, scales = &quot;free&quot;) +
     theme(axis.title = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
-          legend.position = &quot;none&quot;, axis.text.y = element_text(size = 12), strip.text = element_text(size = 14))
+          legend.position = &quot;none&quot;, axis.text.y = element_text(size = 18, colour = &quot;black&quot;), strip.text = element_text(size = 18))
   return(p)
 })
 
@@ -564,8 +581,8 @@ plots_vln &lt;- lapply(1:4, function(i) {
 plots_filter &lt;- lapply(c(&quot;RNA_rescue_ID:_1.0&quot;, &quot;standard_ID:_1.0&quot;, &quot;RNA_rescue_ID:_2.0&quot;, &quot;standard_ID:_2.0&quot;), function(i) {
   p &lt;- ST.FeaturePlot(SubsetSTData(LNG, expression = protocol_lng %in% i), features = &quot;filter&quot;, show.sb = FALSE, pt.size = 1.3, 
                  cols = c(&quot;keep&quot; = &quot;lightgray&quot;, &quot;discard&quot; = &quot;red&quot;), indices = ifelse(i %in% c(&quot;standard_ID:_1.0&quot;, &quot;standard_ID:_2.0&quot;), 2, 1)) &amp;
-    theme(strip.text = element_blank(), plot.title = element_blank(), legend.title = element_blank(), legend.text = element_text(size = 12)) &amp;
-  guides(fill = guide_legend(override.aes = list(size = 5)))
+    theme(strip.text = element_blank(), plot.title = element_blank(), legend.title = element_blank(), legend.text = element_text(size = 16)) &amp;
+  guides(fill = guide_legend(override.aes = list(size = 7)))
   p &lt;- ggrastr::rasterize(p, layers = &quot;Point&quot;, dpi = 300)
   return(p)
 })
@@ -573,13 +590,15 @@ plots_filter &lt;- lapply(c(&quot;RNA_rescue_ID:_1.0&quot;, &quot;standard_ID:_1
 # UMAP plots showing clusters
 plots_umap &lt;- lapply(1:4, function(i) {
   gg &lt;- cbind(LNGList[[i]][[]], LNGList[[i]]@reductions$umap@cell.embeddings)
+
   p &lt;- ggplot() +
     geom_point(data = gg, aes(UMAP_1, UMAP_2, color = seurat_clusters)) +
-    geom_label(size = 7, label.size = 0.3, data = gg %&gt;% 
+    ggrepel::geom_label_repel(size = 9, label.size = 0.2, data = gg %&gt;% 
                  dplyr::group_by(seurat_clusters) %&gt;% 
                  summarize(med1 = median(UMAP_1), med2 = median(UMAP_2)), aes(med1, med2 + 0.6, fill = seurat_clusters, label = seurat_clusters)) +
     theme_classic() +
-    theme(plot.title = element_blank(), legend.text = element_text(size = 12), legend.position = &quot;none&quot;, axis.text = element_text(size = 12), axis.title = element_text(size = 14))
+    theme(plot.title = element_blank(), 
+          legend.position = &quot;none&quot;, axis.text = element_text(size = 14, colour = &quot;black&quot;), axis.title = element_text(size = 18))
   p &lt;- ggrastr::rasterize(p, layers = &quot;Point&quot;, dpi = 300)
   return(p)
 })
@@ -591,19 +610,19 @@ plots_qc &lt;- lapply(1:4, function(i) {
     theme(plot.subtitle = element_blank(), 
           plot.title = element_blank(), 
           strip.text = element_blank(), 
-          legend.text = element_text(size = 12), 
-          legend.title = element_text(size = 14)) &amp;
+          legend.text = element_text(size = 14), 
+          legend.title = element_text(size = 18)) &amp;
     labs(fill = &quot;Unique\ngenes&quot;) 
   p &lt;- ggrastr::rasterize(p, layers = &quot;Point&quot;, dpi = 300)
   return(p)
 })
 
 # HE images
-plots_HE &lt;- plots_spatial &lt;- lapply(1:4, function(i) {
+plots_HE &lt;- lapply(1:4, function(i) {
   im &lt;- GetStaffli(LNGList[[i]])@rasterlists$processed[[ifelse(i %in% c(2, 4), 2, 1)]]
   im[, 1:100] &lt;- &quot;#ffffffff&quot;; im[, (ncol(im) - 120):ncol(im)] &lt;- &quot;#ffffffff&quot;
   im &lt;- im[101:(nrow(im) - 100), ]
-  g &lt;- rasterGrob(im, width = unit(1, &quot;npc&quot;), height = unit(1, &quot;npc&quot;), interpolate = TRUE)
+  g &lt;- grid::rasterGrob(im, width = unit(1, &quot;npc&quot;), height = unit(1, &quot;npc&quot;), interpolate = TRUE)
   ggplot() +
     annotation_custom(g, -Inf, Inf, -Inf, Inf) +
     theme_void() +
@@ -613,7 +632,7 @@ plots_HE &lt;- plots_spatial &lt;- lapply(1:4, function(i) {
 # Spatial plots showing clusters split by clusters
 plots_spatial &lt;- lapply(1:4, function(i) {
   p &lt;- ST.FeaturePlot(LNGList[[i]], features = &quot;seurat_clusters&quot;, split.labels = TRUE, ncol = ifelse(i %in% c(1, 2), 4, 3), 
-                 indices = ifelse(i %in% c(2, 4), 2, 1), show.sb = FALSE, pt.size = 1) +
+                 indices = ifelse(i %in% c(2, 4), 2, 1), show.sb = FALSE, pt.size = 0.5) +
     theme(plot.title = element_blank(), legend.position = &quot;none&quot;, strip.text = element_blank()) &amp;
     scale_x_continuous(limits = c(150, 1850)) &amp;
     scale_y_continuous(limits = c(150, 1850))
@@ -623,23 +642,35 @@ plots_spatial &lt;- lapply(1:4, function(i) {
 
 # Dot plot showing DE genes
 plots_dotplot &lt;- lapply(1:4, function(i) {
-  p &lt;- DotPlot(LNGList[[i]], features = unique(de.markers.list[[i]] %&gt;% 
+  LNG &lt;- LNGList[[i]]
+  if (i == 1) {
+    LNG$seurat_clusters &lt;- factor(ann1[LNG$seurat_clusters], levels = ann1)
+  }
+  if (i == 2) {
+    LNG$seurat_clusters &lt;- factor(ann3[LNG$seurat_clusters], levels = ann3)
+  }
+  LNG &lt;- Seurat::SetIdent(LNG, value = &quot;seurat_clusters&quot;)
+  p &lt;- DotPlot(LNG, features = unique(de.markers.list[[i]] %&gt;% 
                                           dplyr::mutate(gene_count = table(gene)[gene]) %&gt;%
                                           dplyr::filter(gene_count == 1) %&gt;%
                                           dplyr::group_by(cluster) %&gt;%
                                           dplyr::slice_head(n = 4) %&gt;% 
                                           dplyr::pull(gene) %&gt;% rev())) +
     scale_color_gradientn(colours = scico::scico(n = 11, palette = &quot;bam&quot;, direction = -1)) +
-    scale_y_discrete(position = &quot;right&quot;) +
-    theme(axis.title = element_blank(), axis.text = element_text(size = 12), legend.text = element_text(size = 12), legend.title = element_text(size = 14)) +
+    scale_y_discrete(position = &quot;left&quot;) +
+    theme(axis.title = element_blank(), axis.text = element_text(size = 14), legend.text = element_text(size = 14), 
+          legend.title = element_text(size = 14), axis.text.x = element_text(angle = 60, hjust = 1, size = 16)) +
     coord_flip()
   p$guides$colour$title &lt;- &quot;Avg. Expr.&quot;
   p$guides$size$title &lt;- &quot;Pct. Expr.&quot;
   return(p)
 })</code></pre>
 </div>
-<div id="patchwork-for-figure-2-with-both-lng1-and-lng2" class="section level3">
-<h3>Patchwork for Figure 2 with both LNG1 and LNG2</h3>
+<div id="patchwork-for-figure-2" class="section level3">
+<h3>Patchwork for Figure 2</h3>
+<hr />
+<p>This patchwork includes only LNG1 and each plot type is places side
+by side for a simple comparison between the two protocols.</p>
 <pre class="r"><code># Design for patchwork
 design &lt;- c(
   patchwork::area(1, 1, 1, 1),
@@ -648,209 +679,80 @@ design &lt;- c(
   patchwork::area(2, 2, 2, 2),
   patchwork::area(3, 1, 3, 1),
   patchwork::area(4, 1, 4, 1),
-  patchwork::area(3, 2, 4, 2),
+  patchwork::area(3, 2, 3, 2),
+  patchwork::area(4, 2, 4, 2),
   
   patchwork::area(1, 3, 1, 3),
   patchwork::area(1, 4, 1, 4),
   patchwork::area(2, 3, 2, 3),
   patchwork::area(2, 4, 2, 4),
-  patchwork::area(3, 3, 3, 3),
-  patchwork::area(4, 3, 4, 3),
-  patchwork::area(3, 4, 4, 4)
+  patchwork::area(3, 3, 5, 3),
+  patchwork::area(3, 4, 5, 4)
 )
 
 # Create patchwork
-p &lt;- plots_vln[[1]] +
-  plots_HE[[1]] +
-  plots_qc[[1]] +
-  plots_filter[[1]] +
-  plots_spatial[[1]] +
-  plots_umap[[1]] + 
-  plots_dotplot[[1]] +
-  plots_vln[[2]] +
+p &lt;- plots_HE[[1]] +
   plots_HE[[2]] +
+  plots_qc[[1]] +
   plots_qc[[2]] +
-  plots_filter[[2]] +
-  plots_spatial[[2]] +
+  plots_umap[[1]] + 
+  plots_spatial[[1]] +
   plots_umap[[2]] +
+  plots_spatial[[2]] +
+  plots_vln[[1]] +
+  plots_vln[[2]] +
+  plots_filter[[1]] +
+  plots_filter[[2]] +
+  plots_dotplot[[1]] +
   plots_dotplot[[2]] +
-  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2))
+  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2, 0.5))
 
-pdf(file = &quot;figure_2_patchwork_v2.pdf&quot;, width = 26, height = 17)
+pdf(file = &quot;figure_2_patchwork_side_by_side.pdf&quot;, width = 26, height = 20)
 print(p)
 dev.off()</code></pre>
 </div>
-<div id="patchwork-for-figure-2-with-lng1-only" class="section level3">
-<h3>Patchwork for Figure 2 with LNG1 only</h3>
-<pre class="r"><code># Create patchwork
-p &lt;- plots_vln[[3]] +
-  plots_HE[[3]] +
-  plots_qc[[3]] +
-  plots_filter[[3]] +
-  plots_spatial[[3]] +
-  plots_umap[[3]] + 
-  plots_dotplot[[3]] +
-  plots_vln[[4]] +
-  plots_HE[[4]] +
-  plots_qc[[4]] +
-  plots_filter[[4]] +
-  plots_spatial[[4]] +
-  plots_umap[[4]] +
-  plots_dotplot[[4]] +
-  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2))
-
-pdf(file = &quot;figure_2_patchwork_ID2_v2.pdf&quot;, width = 26, height = 17)
-print(p)
-dev.off()</code></pre>
-</div>
-<div id="alternative-figure-2-layout-lng1-and-lng2-separate" class="section level3">
-<h3>Alternative Figure 2 layout, LNG1 and LNG2 separate</h3>
-<pre class="r"><code># Dot plot showing DE genes
-plots_dotplotv2 &lt;- lapply(1:4, function(i) {
-  p &lt;- DotPlot(LNGList[[i]], features = unique(de.markers.list[[i]] %&gt;% 
-                                          dplyr::mutate(gene_count = table(gene)[gene]) %&gt;%
-                                          dplyr::filter(gene_count == 1) %&gt;%
-                                          dplyr::group_by(cluster) %&gt;%
-                                          dplyr::slice_head(n = 6) %&gt;% 
-                                          dplyr::pull(gene))) +
-    scale_color_gradientn(colours = scico::scico(n = 11, palette = &quot;bam&quot;, direction = -1)) +
-    scale_y_discrete(position = &quot;right&quot;) +
-    theme(axis.title = element_blank(), 
-          axis.text = element_text(size = 12), 
-          axis.text.x = element_text(angle = 90, hjust = 1),
-          legend.text = element_text(size = 12), 
-          legend.title = element_text(size = 14))
-  p$guides$colour$title &lt;- &quot;Avg. Expr.&quot;
-  p$guides$size$title &lt;- &quot;Pct. Expr.&quot;
-  return(p)
-})
-
-# Design for patchwork
+<div id="patchwork-for-supplementary-figure" class="section level3">
+<h3>Patchwork for Supplementary Figure</h3>
+<hr />
+<p>This patchwork includes only LNG2 and each plot type is places side
+by side for a simple comparison between the two protocols.</p>
+<pre class="r"><code># Design for patchwork
 design &lt;- c(
   patchwork::area(1, 1, 1, 1),
   patchwork::area(1, 2, 1, 2),
   patchwork::area(2, 1, 2, 1),
   patchwork::area(2, 2, 2, 2),
-  patchwork::area(1, 3, 2, 4),
   patchwork::area(3, 1, 3, 1),
-  patchwork::area(3, 2, 3, 4)
+  patchwork::area(4, 1, 4, 1),
+  patchwork::area(3, 2, 3, 2),
+  patchwork::area(4, 2, 4, 2),
+  
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 3, 2, 3),
+  patchwork::area(2, 4, 2, 4),
+  patchwork::area(3, 3, 5, 3),
+  patchwork::area(3, 4, 5, 4)
 )
 
-# Create patchwork 1
-p &lt;- plots_vln[[1]] +
-  plots_HE[[1]] +
-  plots_qc[[1]] +
-  plots_filter[[1]] +
-  plots_spatial[[1]] +
-  plots_umap[[1]] + 
-  plots_dotplotv2[[1]] +
-  patchwork::plot_layout(design = design, heights = c(1.3, 2, 2))
-
-pdf(file = &quot;figure_2_patchwork_v2.pdf&quot;, width = 18, height = 12)
-print(p)
-dev.off()
-
-# Create patchwork 2
-p &lt;- plots_vln[[2]] +
-  plots_HE[[2]] +
-  plots_qc[[2]] +
-  plots_filter[[2]] +
-  plots_spatial[[2]] +
-  plots_umap[[2]] + 
-  plots_dotplotv2[[2]] +
-  patchwork::plot_layout(design = design, heights = c(1.3, 2, 2))
-
-pdf(file = &quot;figure_2_patchwork_ID2_v2.pdf&quot;, width = 18, height = 12)
-print(p)
-dev.off()</code></pre>
-</div>
-<div id="supplementary-figure-3" class="section level3">
-<h3>Supplementary figure 3</h3>
-<pre class="r"><code># sRR-seq cluster annotations
-ann &lt;- c(&quot;0&quot; = &quot;AT1-enriched&quot;, &quot;1&quot; = &quot;Macrophage-enriched&quot;,
-         &quot;2&quot; = &quot;AT2-enriched&quot;, &quot;3&quot; = &quot;Connective tissue 1&quot;, 
-         &quot;4&quot; = &quot;Connective tissue 2&quot;, &quot;5&quot; = &quot;Connective tissue 3&quot;,
-         &quot;6&quot; = &quot;Airway epithelium&quot;, &quot;7&quot; = &quot;Megakaryocyte-enriched&quot;,
-         &quot;8&quot; = &quot;Smooth muscle&quot;, &quot;9&quot; = &quot;Immune-enriched&quot;, 
-         &quot;10&quot; = &quot;Glands&quot;)
-ann2 &lt;- c(&quot;0&quot; = &quot;AT2-enriched&quot;, &quot;1&quot; = &quot;Low-quality cluster 1&quot;,
-          &quot;2&quot; = &quot;Connective tissue 1&quot;, &quot;3&quot; = &quot;Connective tissue 2&quot;,
-          &quot;4&quot; = &quot;Low-quality cluster 2&quot;, &quot;5&quot; = &quot;Connective tissue 3&quot;,
-          &quot;6&quot; = &quot;Glands&quot;, &quot;7&quot; = &quot;Megakaryocyte-enriched&quot;, 
-          &quot;8&quot; = &quot;Airway epithelium&quot;)
-lvls &lt;- c(ann, c(&quot;Low-quality cluster 1&quot;, &quot;Low-quality cluster 2&quot;))
-
-# Dot plot showing DE genes
-LNGList[[1]]$ann &lt;- factor(ann[LNGList[[1]]$seurat_clusters], levels = ann)
-LNGList[[1]] &lt;- SetIdent(LNGList[[1]], value = &quot;ann&quot;)
-dotplot_LNG1 &lt;- DotPlot(LNGList[[1]], features = unique(de.markers.list[[i]] %&gt;% 
-                                          dplyr::mutate(gene_count = table(gene)[gene]) %&gt;%
-                                          dplyr::filter(gene_count == 1) %&gt;%
-                                          dplyr::group_by(cluster) %&gt;%
-                                          dplyr::slice_head(n = 6) %&gt;% 
-                                          dplyr::pull(gene))) +
-  scale_color_gradientn(colours = scico::scico(n = 11, palette = &quot;bam&quot;, direction = -1)) +
-  scale_y_discrete(position = &quot;right&quot;) +
-  theme(axis.title = element_blank(), 
-        axis.text = element_text(size = 12), 
-        axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.text = element_text(size = 12), 
-        legend.title = element_text(size = 14))
-dotplot_LNG1$guides$colour$title &lt;- &quot;Avg. Expr.&quot;
-dotplot_LNG1$guides$size$title &lt;- &quot;Pct. Expr.&quot;
-
-
-selected.markers.airway.epithelium &lt;- c(&quot;CFAP99&quot;, &quot;DNAI2&quot;, &quot;CFAP65&quot;, &quot;CCDC33&quot;, &quot;CCDC65&quot;)
-selected.markers.glands &lt;- c(&quot;LPO&quot;, &quot;GCNT3&quot;, &quot;C2CD4A&quot;, &quot;TCN1&quot;, &quot;PIP&quot;)
-selected.markers.platelet &lt;- c(&quot;GFI1B&quot;, &quot;GP9&quot;, &quot;MFSD2B&quot;, &quot;GATA1&quot;, &quot;GP1BA&quot;)
-selected.markers.smoothmuscle &lt;- c(&quot;LGR6&quot;, &quot;PLN&quot;, &quot;HSPB7&quot;, &quot;KCNA5&quot;, &quot;CSDC2&quot;, &quot;SCUBE3&quot;)
-
-all.markers &lt;- list(&quot;Airway epithelium&quot; = selected.markers.airway.epithelium, 
-                    &quot;Glands&quot; = selected.markers.glands, 
-                    &quot;Megakaryocyte-enriched&quot; = selected.markers.platelet, 
-                    &quot;Smooth muscle&quot; = selected.markers.smoothmuscle)
-
-LNGList[[1]] &lt;- SetIdent(LNGList[[1]], value = &quot;seurat_clusters&quot;)
-ggm &lt;- do.call(rbind, lapply(names(all.markers), function(n) {
-  print(n)
-  mrks &lt;- all.markers[[n]][1:5]
-  data1 &lt;- cbind(FetchData(LNGList[[1]], slot = &quot;data&quot;, vars = mrks), type = &quot;sRR-seq&quot;)
-  data2 &lt;- cbind(FetchData(LNGList[[2]], slot = &quot;data&quot;, vars = mrks), type = &quot;standard&quot;)
-  data &lt;- rbind(data1, data2)
-  gg &lt;- cbind(rbind(LNGList[[1]][[]] %&gt;% dplyr::select(-ann), LNGList[[2]][[]]), data)
-  ggm &lt;- reshape2::melt(gg, measure.vars = mrks)
-  ggm$region &lt;- n
-  return(ggm)
-}))
-
-plot_selected_markers &lt;- ggm %&gt;% 
-  dplyr::mutate(annotations = ifelse(type == &quot;sRR-seq&quot;, ann[seurat_clusters], ann2[seurat_clusters])) %&gt;%
-  dplyr::mutate(annotations = factor(annotations, levels = lvls), variable = 
-                  factor(variable, levels = unlist(all.markers[c(1, 3, 4, 2)]))) %&gt;%
-  ggplot(aes(annotations, value, fill = seurat_clusters)) +
-    geom_violin(scale = &quot;width&quot;) +
-    geom_jitter(size = 0.1) +
-    theme_classic() +
-    facet_grid(variable ~ type, space = &quot;free&quot;, scales = &quot;free_x&quot;) +
-    theme(legend.position = &quot;none&quot;, 
-          axis.text.x = element_text(angle = 90, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          strip.background = element_rect(colour = NA), 
-          strip.text.x = element_blank(),
-          strip.text.y = element_text(angle = 0, hjust = 0), 
-          axis.title.y = element_text(size = 14)) +
-    labs(y = &quot;Log-normalized expression&quot;, x = &quot;&quot;)
-
-plot_selected_markers &lt;- ggrastr::rasterize(plot_selected_markers , layers = &quot;Point&quot;, dpi = 300)
-
 # Create patchwork
-design &lt;- c(patchwork::area(1, 1, 1, 2),
-            patchwork::area(2, 1, 2, 2))
-p &lt;- dotplot_LNG1 + 
-  plot_selected_markers + 
-  patchwork::plot_layout(nrow = 2, heights = c(1, 4.5), design = design)
+p &lt;- plots_HE[[3]] +
+  plots_HE[[4]] +
+  plots_qc[[3]] +
+  plots_qc[[4]] +
+  plots_umap[[3]] + 
+  plots_spatial[[3]] +
+  plots_umap[[4]] +
+  plots_spatial[[4]] +
+  plots_vln[[3]] +
+  plots_vln[[4]] +
+  plots_filter[[3]] +
+  plots_filter[[4]] +
+  plots_dotplot[[3]] +
+  plots_dotplot[[4]] +
+  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2, 0.5))
 
-pdf(file = &quot;../Suppl_Figure_3/Suppl_figure_3_patchwork_markers.pdf&quot;, width = 15, height = 18)
+pdf(file = &quot;suppl_figure_lung_patchwork_side_by_side.pdf&quot;, width = 26, height = 20)
 print(p)
 dev.off()</code></pre>
 </div>
@@ -859,11 +761,73 @@ dev.off()</code></pre>
 <h1>date</h1>
 <hr />
 <pre class="r"><code>date()</code></pre>
+<pre><code>## [1] &quot;Fri Jul  8 13:47:57 2022&quot;</code></pre>
 </div>
 <div id="session" class="section level1">
 <h1>Session</h1>
 <hr />
 <pre class="r"><code>devtools::session_info()</code></pre>
+<pre><code>## ─ Session info ───────────────────────────────────────────────────────────────
+##  setting  value
+##  version  R version 4.1.3 (2022-03-10)
+##  os       macOS Big Sur/Monterey 10.16
+##  system   x86_64, darwin13.4.0
+##  ui       unknown
+##  language (EN)
+##  collate  en_US.UTF-8
+##  ctype    en_US.UTF-8
+##  tz       Europe/Stockholm
+##  date     2022-07-08
+##  pandoc   2.18 @ /usr/local/bin/ (via rmarkdown)
+## 
+## ─ Packages ───────────────────────────────────────────────────────────────────
+##  package     * version date (UTC) lib source
+##  brio          1.1.3   2021-11-30 [1] CRAN (R 4.1.1)
+##  bslib         0.3.1   2021-10-06 [1] CRAN (R 4.1.1)
+##  cachem        1.0.6   2021-08-19 [1] CRAN (R 4.1.1)
+##  callr         3.7.0   2021-04-20 [1] CRAN (R 4.1.0)
+##  cli           3.2.0   2022-02-14 [1] CRAN (R 4.1.2)
+##  crayon        1.5.1   2022-03-26 [1] CRAN (R 4.1.2)
+##  desc          1.4.1   2022-03-06 [1] CRAN (R 4.1.2)
+##  devtools      2.4.3   2021-11-30 [1] CRAN (R 4.1.1)
+##  digest        0.6.29  2021-12-01 [1] CRAN (R 4.1.1)
+##  ellipsis      0.3.2   2021-04-29 [1] CRAN (R 4.1.0)
+##  evaluate      0.15    2022-02-18 [1] CRAN (R 4.1.2)
+##  fastmap       1.1.0   2021-01-25 [1] CRAN (R 4.1.0)
+##  fs            1.5.2   2021-12-08 [1] CRAN (R 4.1.3)
+##  glue          1.6.2   2022-02-24 [1] CRAN (R 4.1.2)
+##  htmltools     0.5.2   2021-08-25 [1] CRAN (R 4.1.1)
+##  jquerylib     0.1.4   2021-04-26 [1] CRAN (R 4.1.0)
+##  jsonlite      1.8.0   2022-02-22 [1] CRAN (R 4.1.2)
+##  knitr         1.38    2022-03-25 [1] CRAN (R 4.1.2)
+##  lifecycle     1.0.1   2021-09-24 [1] CRAN (R 4.1.1)
+##  magrittr      2.0.3   2022-03-30 [1] CRAN (R 4.1.3)
+##  memoise       2.0.1   2021-11-26 [1] CRAN (R 4.1.1)
+##  pkgbuild      1.3.1   2021-12-20 [1] CRAN (R 4.1.2)
+##  pkgload       1.2.4   2021-11-30 [1] CRAN (R 4.1.1)
+##  prettyunits   1.1.1   2020-01-24 [1] CRAN (R 4.1.0)
+##  processx      3.5.3   2022-03-25 [1] CRAN (R 4.1.2)
+##  ps            1.6.0   2021-02-28 [1] CRAN (R 4.1.0)
+##  purrr         0.3.4   2020-04-17 [1] CRAN (R 4.1.0)
+##  R6            2.5.1   2021-08-19 [1] CRAN (R 4.1.1)
+##  remotes       2.4.2   2021-11-30 [1] CRAN (R 4.1.1)
+##  rlang         1.0.2   2022-03-04 [1] CRAN (R 4.1.2)
+##  rmarkdown     2.13    2022-03-10 [1] CRAN (R 4.1.2)
+##  rprojroot     2.0.3   2022-04-02 [1] CRAN (R 4.1.3)
+##  rstudioapi    0.13    2020-11-12 [1] CRAN (R 4.1.0)
+##  sass          0.4.1   2022-03-23 [1] CRAN (R 4.1.2)
+##  sessioninfo   1.2.2   2021-12-06 [1] CRAN (R 4.1.1)
+##  stringi       1.7.6   2021-11-29 [1] CRAN (R 4.1.1)
+##  stringr       1.4.0   2019-02-10 [1] CRAN (R 4.1.0)
+##  testthat      3.1.3   2022-03-29 [1] CRAN (R 4.1.3)
+##  usethis       2.1.5   2021-12-09 [1] CRAN (R 4.1.1)
+##  withr         2.5.0   2022-03-03 [1] CRAN (R 4.1.2)
+##  xfun          0.30    2022-03-02 [1] CRAN (R 4.1.2)
+##  yaml          2.3.5   2022-02-21 [1] CRAN (R 4.1.2)
+## 
+##  [1] /Users/ludviglarsson/anaconda3/envs/R4.1/lib/R/library
+## 
+## ──────────────────────────────────────────────────────────────────────────────</code></pre>
 </div>
 
 

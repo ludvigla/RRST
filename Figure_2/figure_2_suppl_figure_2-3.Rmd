@@ -1,5 +1,5 @@
 ---
-title: "Figure 2, Suppl. Figure 2 and 3"
+title: "Figure 2 + suppl.figures"
 author: "Ludvig Larsson"
 date: '2022-05-23'
 output: html_document
@@ -253,7 +253,7 @@ de.markers.list <- lapply(de.markers.list.025, function(de.markers) {
 ### Add cluster annotations
 ***
 
-```{r}
+```{r eval=FALSE}
 
 # sRR-seq cluster annotations
 ann1 <- c("0" = "AT1-enriched", "1" = "Macrophage-enriched",
@@ -395,7 +395,7 @@ plots_dotplot <- lapply(1:4, function(i) {
 
 This patchwork includes only LNG1 and each plot type is places side by side for a simple comparison between the two protocols.
 
-```{r}
+```{r eval=FALSE}
 
 # Design for patchwork
 design <- c(
@@ -439,12 +439,12 @@ dev.off()
 
 ```
 
-### Patchwork for SUpplementary Figure 
+### Patchwork for Supplementary Figure 
 ***
 
 This patchwork includes only LNG2 and each plot type is places side by side for a simple comparison between the two protocols.
 
-```{r}
+```{r eval=FALSE}
 
 # Design for patchwork
 design <- c(
@@ -489,252 +489,16 @@ dev.off()
 ```
 
 
-
-
-
-### Patchwork for Figure 2 with both LNG1 and LNG2
-
-```{r eval=FALSE}
-
-# Design for patchwork
-design <- c(
-  patchwork::area(1, 1, 1, 1),
-  patchwork::area(1, 2, 1, 2),
-  patchwork::area(2, 1, 2, 1),
-  patchwork::area(2, 2, 2, 2),
-  patchwork::area(3, 1, 3, 1),
-  patchwork::area(4, 1, 4, 1),
-  patchwork::area(3, 2, 4, 2),
-  
-  patchwork::area(1, 3, 1, 3),
-  patchwork::area(1, 4, 1, 4),
-  patchwork::area(2, 3, 2, 3),
-  patchwork::area(2, 4, 2, 4),
-  patchwork::area(3, 3, 3, 3),
-  patchwork::area(4, 3, 4, 3),
-  patchwork::area(3, 4, 4, 4)
-)
-
-# Create patchwork
-p <- plots_vln[[1]] +
-  plots_HE[[1]] +
-  plots_qc[[1]] +
-  plots_filter[[1]] +
-  plots_spatial[[1]] +
-  plots_umap[[1]] + 
-  plots_dotplot[[1]] +
-  plots_vln[[2]] +
-  plots_HE[[2]] +
-  plots_qc[[2]] +
-  plots_filter[[2]] +
-  plots_spatial[[2]] +
-  plots_umap[[2]] +
-  plots_dotplot[[2]] +
-  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2))
-
-pdf(file = "figure_2_patchwork_v2.pdf", width = 26, height = 17)
-print(p)
-dev.off()
-
-```
-
-### Patchwork for Figure 2 with LNG1 only
-
-```{r eval=FALSE}
-
-# Create patchwork
-p <- plots_vln[[3]] +
-  plots_HE[[3]] +
-  plots_qc[[3]] +
-  plots_filter[[3]] +
-  plots_spatial[[3]] +
-  plots_umap[[3]] + 
-  plots_dotplot[[3]] +
-  plots_vln[[4]] +
-  plots_HE[[4]] +
-  plots_qc[[4]] +
-  plots_filter[[4]] +
-  plots_spatial[[4]] +
-  plots_umap[[4]] +
-  plots_dotplot[[4]] +
-  patchwork::plot_layout(design = design, heights = c(1.5, 2, 2, 2))
-
-pdf(file = "figure_2_patchwork_ID2_v2.pdf", width = 26, height = 17)
-print(p)
-dev.off()
-
-```
-
-### Alternative Figure 2 layout, LNG1 and LNG2 separate
-
-```{r eval=FALSE}
-
-# Dot plot showing DE genes
-plots_dotplotv2 <- lapply(1:4, function(i) {
-  p <- DotPlot(LNGList[[i]], features = unique(de.markers.list[[i]] %>% 
-                                          dplyr::mutate(gene_count = table(gene)[gene]) %>%
-                                          dplyr::filter(gene_count == 1) %>%
-                                          dplyr::group_by(cluster) %>%
-                                          dplyr::slice_head(n = 6) %>% 
-                                          dplyr::pull(gene))) +
-    scale_color_gradientn(colours = scico::scico(n = 11, palette = "bam", direction = -1)) +
-    scale_y_discrete(position = "right") +
-    theme(axis.title = element_blank(), 
-          axis.text = element_text(size = 12), 
-          axis.text.x = element_text(angle = 90, hjust = 1),
-          legend.text = element_text(size = 12), 
-          legend.title = element_text(size = 14))
-  p$guides$colour$title <- "Avg. Expr."
-  p$guides$size$title <- "Pct. Expr."
-  return(p)
-})
-
-# Design for patchwork
-design <- c(
-  patchwork::area(1, 1, 1, 1),
-  patchwork::area(1, 2, 1, 2),
-  patchwork::area(2, 1, 2, 1),
-  patchwork::area(2, 2, 2, 2),
-  patchwork::area(1, 3, 2, 4),
-  patchwork::area(3, 1, 3, 1),
-  patchwork::area(3, 2, 3, 4)
-)
-
-# Create patchwork 1
-p <- plots_vln[[1]] +
-  plots_HE[[1]] +
-  plots_qc[[1]] +
-  plots_filter[[1]] +
-  plots_spatial[[1]] +
-  plots_umap[[1]] + 
-  plots_dotplotv2[[1]] +
-  patchwork::plot_layout(design = design, heights = c(1.3, 2, 2))
-
-pdf(file = "figure_2_patchwork_v2.pdf", width = 18, height = 12)
-print(p)
-dev.off()
-
-# Create patchwork 2
-p <- plots_vln[[2]] +
-  plots_HE[[2]] +
-  plots_qc[[2]] +
-  plots_filter[[2]] +
-  plots_spatial[[2]] +
-  plots_umap[[2]] + 
-  plots_dotplotv2[[2]] +
-  patchwork::plot_layout(design = design, heights = c(1.3, 2, 2))
-
-pdf(file = "figure_2_patchwork_ID2_v2.pdf", width = 18, height = 12)
-print(p)
-dev.off()
-
-```
-
-### Supplementary figure 3
-
-```{r eval=FALSE}
-
-# sRR-seq cluster annotations
-ann <- c("0" = "AT1-enriched", "1" = "Macrophage-enriched",
-         "2" = "AT2-enriched", "3" = "Connective tissue 1", 
-         "4" = "Connective tissue 2", "5" = "Connective tissue 3",
-         "6" = "Airway epithelium", "7" = "Megakaryocyte-enriched",
-         "8" = "Smooth muscle", "9" = "Immune-enriched", 
-         "10" = "Glands")
-ann2 <- c("0" = "AT2-enriched", "1" = "Low-quality cluster 1",
-          "2" = "Connective tissue 1", "3" = "Connective tissue 2",
-          "4" = "Low-quality cluster 2", "5" = "Connective tissue 3",
-          "6" = "Glands", "7" = "Megakaryocyte-enriched", 
-          "8" = "Airway epithelium")
-lvls <- c(ann, c("Low-quality cluster 1", "Low-quality cluster 2"))
-
-# Dot plot showing DE genes
-LNGList[[1]]$ann <- factor(ann[LNGList[[1]]$seurat_clusters], levels = ann)
-LNGList[[1]] <- SetIdent(LNGList[[1]], value = "ann")
-dotplot_LNG1 <- DotPlot(LNGList[[1]], features = unique(de.markers.list[[i]] %>% 
-                                          dplyr::mutate(gene_count = table(gene)[gene]) %>%
-                                          dplyr::filter(gene_count == 1) %>%
-                                          dplyr::group_by(cluster) %>%
-                                          dplyr::slice_head(n = 6) %>% 
-                                          dplyr::pull(gene))) +
-  scale_color_gradientn(colours = scico::scico(n = 11, palette = "bam", direction = -1)) +
-  scale_y_discrete(position = "right") +
-  theme(axis.title = element_blank(), 
-        axis.text = element_text(size = 12), 
-        axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.text = element_text(size = 12), 
-        legend.title = element_text(size = 14))
-dotplot_LNG1$guides$colour$title <- "Avg. Expr."
-dotplot_LNG1$guides$size$title <- "Pct. Expr."
-
-
-selected.markers.airway.epithelium <- c("CFAP99", "DNAI2", "CFAP65", "CCDC33", "CCDC65")
-selected.markers.glands <- c("LPO", "GCNT3", "C2CD4A", "TCN1", "PIP")
-selected.markers.platelet <- c("GFI1B", "GP9", "MFSD2B", "GATA1", "GP1BA")
-selected.markers.smoothmuscle <- c("LGR6", "PLN", "HSPB7", "KCNA5", "CSDC2", "SCUBE3")
-
-all.markers <- list("Airway epithelium" = selected.markers.airway.epithelium, 
-                    "Glands" = selected.markers.glands, 
-                    "Megakaryocyte-enriched" = selected.markers.platelet, 
-                    "Smooth muscle" = selected.markers.smoothmuscle)
-
-LNGList[[1]] <- SetIdent(LNGList[[1]], value = "seurat_clusters")
-ggm <- do.call(rbind, lapply(names(all.markers), function(n) {
-  print(n)
-  mrks <- all.markers[[n]][1:5]
-  data1 <- cbind(FetchData(LNGList[[1]], slot = "data", vars = mrks), type = "sRR-seq")
-  data2 <- cbind(FetchData(LNGList[[2]], slot = "data", vars = mrks), type = "standard")
-  data <- rbind(data1, data2)
-  gg <- cbind(rbind(LNGList[[1]][[]] %>% dplyr::select(-ann), LNGList[[2]][[]]), data)
-  ggm <- reshape2::melt(gg, measure.vars = mrks)
-  ggm$region <- n
-  return(ggm)
-}))
-
-plot_selected_markers <- ggm %>% 
-  dplyr::mutate(annotations = ifelse(type == "sRR-seq", ann[seurat_clusters], ann2[seurat_clusters])) %>%
-  dplyr::mutate(annotations = factor(annotations, levels = lvls), variable = 
-                  factor(variable, levels = unlist(all.markers[c(1, 3, 4, 2)]))) %>%
-  ggplot(aes(annotations, value, fill = seurat_clusters)) +
-    geom_violin(scale = "width") +
-    geom_jitter(size = 0.1) +
-    theme_classic() +
-    facet_grid(variable ~ type, space = "free", scales = "free_x") +
-    theme(legend.position = "none", 
-          axis.text.x = element_text(angle = 90, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          strip.background = element_rect(colour = NA), 
-          strip.text.x = element_blank(),
-          strip.text.y = element_text(angle = 0, hjust = 0), 
-          axis.title.y = element_text(size = 14)) +
-    labs(y = "Log-normalized expression", x = "")
-
-plot_selected_markers <- ggrastr::rasterize(plot_selected_markers , layers = "Point", dpi = 300)
-
-# Create patchwork
-design <- c(patchwork::area(1, 1, 1, 2),
-            patchwork::area(2, 1, 2, 2))
-p <- dotplot_LNG1 + 
-  plot_selected_markers + 
-  patchwork::plot_layout(nrow = 2, heights = c(1, 4.5), design = design)
-
-pdf(file = "../Suppl_Figure_3/Suppl_figure_3_patchwork_markers.pdf", width = 15, height = 18)
-print(p)
-dev.off()
-
-```
-
-
 # date
 ***
 
-```{r eval=FALSE}
+```{r}
 date()
 ```
 
 # Session
 ***
 
-```{r eval=FALSE}
+```{r}
 devtools::session_info()
 ```

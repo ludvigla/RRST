@@ -1,0 +1,161 @@
+---
+title: "Untitled"
+author: "Ludvig Larsson"
+date: '2022-05-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r}
+library(Seurat)
+library(ggplot2)
+```
+
+
+Assemble spaceranger output files
+
+```{r}
+
+# Assemble output files
+samples <- list.files(path = "../../../spaceranger_output", pattern = "filtered_feature_bc_matrix", 
+                      recursive = TRUE, full.names = TRUE)
+samples <- samples[-grep(pattern = "downsampled", x = samples)]
+imgs <- list.files(path = "../../../spaceranger_output", pattern = "tissue_hires_image", 
+                   recursive = TRUE, full.names = TRUE)
+spotfiles<- list.files(path = "../../../spaceranger_output", pattern = "tissue_positions_list", 
+                       recursive = TRUE, full.names = TRUE)
+json <- list.files(path = "../../../spaceranger_output", pattern = "scalefactors_json", 
+                   recursive = TRUE, full.names = TRUE)
+metrics <- list.files(path = "../../../spaceranger_output", pattern = "metrics_summary", 
+                      recursive = TRUE, full.names = TRUE)
+metrics <- metrics[-grep(pattern = "downsampled", x = metrics)]
+
+# Create infoTable
+infoTable <- data.frame(samples, imgs, spotfiles, json)
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, c(5)])
+
+```
+
+Merge metrics with additional metadata
+
+```{r}
+
+curated_metadata <- openxlsx::read.xlsx(xlsxFile = "../../../sheets/curated_RNA_rescue_sample_metadata.xlsx", 
+                                        check.names = FALSE, sheet = 3)
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
+                                                       "project", "experimenter", "processer", "comments",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable_merged <- merge(infoTable, curated_metadata, by = "arrayID")
+
+```
+
+Calculate spot sample metrics
+
+```{r}
+
+qc_all_samples <- do.call(rbind, lapply(seq_along(infoTable_merged$samples), function(i) {
+  print(i)
+  f <- infoTable_merged$samples[i]
+  exprMat <- suppressWarnings({Seurat::Read10X_h5(f)})
+  data.frame(SpotID = colnames(exprMat), 
+             UMIs = Matrix::colSums(exprMat), 
+             unique_genes = Matrix::colSums(exprMat > 0),
+             arrayID = infoTable_merged$arrayID[i])
+}))
+
+```
+
+Add additional meta data
+
+```{r}
+
+qc_all_samples <- merge(qc_all_samples, infoTable_merged, by = "arrayID")
+qc_all_samples <- qc_all_samples %>%
+  mutate(paper_id_ext = case_when(source == "adult human colon" ~ paste0("CLN", substr(paper_id, 1, 1)),
+                                  source == "adult human lung" ~ paste0("LNG", substr(paper_id, 1, 1)),
+                                  source == "child brain tumor" ~ paste0("CBT", substr(paper_id, 1, 1)),
+                                  source == "mouse bone" ~ paste0("BN_", paper_id),
+                                  source == "prostate cancer" ~ "PC",
+                                  source == "small intestine" ~ "SI",
+                                  source == "mouse brain" ~ "MB"))
+
+# Sort levels
+qc_all_samples$source <- factor(qc_all_samples$source, 
+                                levels = c("mouse brain", "prostate cancer", "adult human lung", "adult human colon",
+                                                                  "small intestine", "child brain tumor", "mouse bone"))
+qc_all_samples$paper_id_ext <- factor(qc_all_samples$paper_id_ext, 
+                                      levels = c("MB", "PC", "LNG1", "LNG2", "CLN1", "CLN2", "SI", "CBT1", "CBT2", "BN_P4", "BN_P11"))
+
+qc_all_samples$arrayID <- factor(qc_all_samples$arrayID, levels = qc_all_samples %>% group_by(paper_id_ext, source, arrayID) %>% tally() %>% pull(arrayID))
+
+```
+
+
+```{r fig.width=12, fig.height=5}
+
+p <- ggplot(qc_all_samples %>% mutate(protocol = case_when(protocol == "RNA rescue" ~ "RRST", TRUE ~ protocol)), aes(arrayID, unique_genes, fill = protocol)) +
+  geom_violin(scale = "width") +
+  theme_bw() +
+  theme(axis.title = element_blank(), 
+        axis.text.y = element_text(colour = "black", size = 7),
+        axis.text.x = element_text(angle = 60, hjust = 1, color = "black"), 
+        strip.text.x = element_text(size = 8, color = "white", face = "bold"), 
+        strip.text.y = element_text(size = 7, color = "white"), 
+        strip.background = element_rect(fill = "#3A3B3C"),
+        legend.position = "top") +
+  labs(title = "Unique genes per spot") +
+  facet_grid(paper_id_ext ~ source, scales = "free", space = "free", 
+             labeller = labeller(source = label_wrap_gen(width = 12))) +
+  scale_fill_manual(values = c("#4477AA", "#DDCC77", "#CC6677"))
+
+pdf(file = "QC_all_samples_unique_genes.pdf", width = 10, height = 12)
+print(p)
+dev.off()
+
+png(filename = "QC_all_samples_unique_genes.png", width = 1000*2.5, height = 1200*2.5, res = 300)
+print(p)
+dev.off()
+
+```
+
+```{r fig.width=12, fig.height=5}
+
+p <- ggplot(qc_all_samples %>% mutate(protocol = case_when(protocol == "RNA rescue" ~ "RRST", TRUE ~ protocol)), aes(arrayID, UMIs, fill = protocol)) +
+  geom_violin(scale = "width") +
+  theme_bw() +
+  theme(axis.title = element_blank(), 
+        axis.text.y = element_text(colour = "black", size = 7),
+        axis.text.x = element_text(angle = 60, hjust = 1, color = "black"), 
+        strip.text.x = element_text(size = 8, color = "white", face = "bold"), 
+        strip.text.y = element_text(size = 7, color = "white"), 
+        strip.background = element_rect(fill = "#3A3B3C"),
+        legend.position = "top") +
+  labs(title = "UMIs per spot") +
+  facet_grid(paper_id_ext ~ source, scales = "free", space = "free", 
+             labeller = labeller(source = label_wrap_gen(width = 12))) +
+  scale_fill_manual(values = c("#4477AA", "#DDCC77", "#CC6677")) +
+  scale_y_log10()
+
+pdf(file = "QC_all_samples_UMIs.pdf", width = 10, height = 12)
+print(p)
+dev.off()
+
+png(filename = "QC_all_samples_UMIs.png", width = 1000*2.5, height = 1200*2.5, res = 300)
+print(p)
+dev.off()
+
+```

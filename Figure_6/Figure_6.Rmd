@@ -319,6 +319,40 @@ dev.off()
 
 ```
 
+## Suppl. fig. - Phillips suggestion
+***
+
+```{r}
+
+# se.filtered <- readRDS("../../doc/analysis/R_objects/mBone_Seurat_object_filtered")
+
+p <- ST.FeaturePlot(se.filtered, features = "seurat_clusters_harmony", label.by = "day_rep", ncol = 2, show.sb = FALSE, pt.size = 1.3) & 
+  theme(legend.position = "bottom", plot.title = element_blank(),
+        strip.text = element_text(size = 14, colour = "black", face = "bold")) &
+  guides(fill = guide_legend(override.aes = list(size = 5))) &
+  labs(fill = "cluster label")
+p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+
+pdf(file = "../Suppl_figures/Suppl_Figure_mBone_clustering_and_DEA/Suppl_figure_clustering.pdf", width = 7, height = 9)
+print(p)
+dev.off()
+
+
+de.markers.all.data <- readRDS("../../doc/analysis/R_objects/de.markers.all.data")
+p_dea <- DoHeatmap(se.filtered, features = de.markers.all.data %>% 
+          group_by(cluster) %>% 
+          filter(p_val_adj < 0.01) %>%
+          slice_head(n = 6) %>% 
+          pull(gene))
+
+pdf(file = "../Suppl_figures/Suppl_Figure_mBone_clustering_and_DEA/Suppl_figure_DEA.pdf", width = 8, height = 11)
+print(p_dea)
+dev.off()
+
+```
+
+
+
 
 ## Figure 6 - first draft
 ***

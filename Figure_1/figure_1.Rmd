@@ -9,18 +9,24 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Load libraries
+Load required libraries
 
 ```{r}
 
 library(STutility)
 library(ggplot2)
 library(ggpubr)
+library(ggrastr)
+library(dplyr)
+library(magrittr)
+library(ggbreak)
 
 ```
 
 
 Assemble spaceranger output files
+
+TODO: make datasets available for download
 
 ```{r}
 
@@ -39,10 +45,10 @@ json2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/sca
 infoTable <- data.frame(samples = c(samples1, samples2), imgs = c(imgs1, imgs2), spotfiles = c(spotfiles1, spotfiles2), json = c(json1, json2))
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx")
+curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
                                                        "project", "experimenter", "processer", "comments",
-                                                       "ID", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",
@@ -59,48 +65,26 @@ infoTable <- subset(infoTable, !protocol %in% "FFPE")
 
 ```
 
-
-
-Load mouse brain data
+Load mouse brain Visium data (4xRRST + 4xstandard)
 
 ```{r}
 
-MB_infoTable <- subset(infoTable, source == "degraded_MB")
-MB_infoTable <- subset(MB_infoTable, include == "yes")
+# Subset infoTable to include mosuebrain data
+MB_infoTable <- subset(infoTable, source == "mouse brain")
 MB <- InputFromTable(infotable = MB_infoTable)
 
 ```
 
+Load H&E images into the `MB` object
 
-```{r}
+```{r fig.width=8, fig.height=4}
 
-VlnPlot(MB, features = "nFeature_RNA", group.by = "arrayID", split.by = "protocol")
-
-```
-
-
-```{r}
-
-MB <- LoadImages(MB, time.resolve = FALSE, xdim = 1e3)
+MB <- LoadImages(MB, time.resolve = FALSE)
+ImagePlot(MB, ncols = 4)
 
 ```
 
-Prepare data for image transformation.
-
-```{r}
-
-# Prepare data for rigid transformation
-st.object <- GetStaffli(MB)
-msks <- lapply(st.object@rasterlists$raw, function(im) {
-  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
-})
-st.object@rasterlists$masked <- st.object@rasterlists$raw
-st.object@rasterlists$masked.masks <- msks
-MB@tools$Staffli <- st.object
-
-```
-
-Apply transformations
+Here we apply some rotations to make a rough alignment of the H&E images.
 
 ```{r}
 
@@ -111,11 +95,17 @@ MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "
                                                        "7" = list(angle = 90), "8" = list(angle = -90)))
 ```
 
-Spatial plot
+# Figure 1
+***
 
-```{r fig.width=8, fig.height=4}
+## b - Spatial map of unique genes per spot [mousebrain]
+***
 
-# MB$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[MB$protocol]
+```{r fig.width=8, fig.height=5}
+
+MB$protocol <- MB[[]] %>%
+  mutate(protocol = ifelse(protocol == "RNA rescue", "RRST", protocol)) %>%
+  pull(protocol)
 
 p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), show.sb = FALSE,
                     label.by = "protocol",  pt.size = 1.2) &
@@ -124,18 +114,22 @@ p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), 
         legend.title = element_text(size = 18, face = "bold", colour = "black", vjust = 1),
         strip.text = element_text(size = 18, face = "bold", colour = "black")) &
   labs(fill = "unique genes")
+p
 
-jpeg(filename = "mousebrain_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
+```
+
+```{r eval=FALSE}
+jpeg(filename = "plots/mousebrain_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
 print(p)
 dev.off()
 
 ```
 
-Violin plot
+## c - Violin plots of unique genes per spot [mousebrain]
+***
 
 ```{r}
 
-library(dplyr)
 p <- ggplot(MB[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
   geom_violin(scale = "width") +
   geom_boxplot(width = 0.3) +
@@ -152,13 +146,20 @@ p <- ggplot(MB[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
   guides(fill = "none") +
   scale_x_discrete(labels = c("", "Rep1", "Rep2", "Rep3", "Rep4"))
 
-jpeg(filename = "mousebrain_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
+p
+
+```
+
+```{r eval=FALSE}
+
+# Export plot
+jpeg(filename = "plots/mousebrain_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
 print(p)
 dev.off()
 
 ```
 
-Compare gene attributes
+Calculate gene attributes for mouse brain data
 
 ```{r}
 
@@ -175,18 +176,27 @@ gene_attr <- gene_attr %>%
 
 ```
 
-```{r fig.width=8, fig.height=4}
+Subset genes to include those available in the Visium FFPE probe set.
 
-mouse_probes <- read.csv("../../sheets/Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv", skip = 5, header = TRUE)
+```{r}
+
+mouse_probes <- read.csv("sheets/Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv", skip = 5, header = TRUE)
 mouse_probes$gene_name <- do.call(rbind, strsplit(mouse_probes$probe_id, "\\|"))[, 2]
+
+```
+
+## d - Gene-gene scatter plot of detection rate and UMI counts [mouse brain]
+***
+
+```{r fig.width=8, fig.height=4}
 
 p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% 
                subset(gene %in% mouse_probes$gene_name), 
              aes_string("standard_log_count", "RRST_log_count")) +
   geom_point(size = 0.3) +
   ggpubr::stat_cor(digits = 2) +
-  scale_x_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
-  scale_y_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_x_continuous(limits = c(0, max(max(gene_attr$`RRST_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_y_continuous(limits = c(0, max(max(gene_attr$`RRST_log_count`), max(gene_attr$standard_log_count)))) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
   labs(x = "standard protocol", y = "RRST", title = "log1p(UMI counts)") +
   theme_minimal() +
@@ -201,25 +211,28 @@ p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RRST_det_rate")) +
   theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
-p <- p1 + p2
-p
+p1 + p2
 
-jpeg(filename = "mousebrain_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
+```
+
+```{r eval=FALSE}
+
+# Export plots
+jpeg(filename = "plots/mousebrain_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
 print(p1)
 dev.off()
-jpeg(filename = "mousebrain_gene_scatter_det_rater.jpg", width = 1000, height = 1000, res = 300)
+jpeg(filename = "plots/mousebrain_gene_scatter_det_rater.jpg", width = 1000, height = 1000, res = 300)
 print(p2)
 dev.off()
 
 ```
 
-Check biotype content
+## Supplementary figure - biotype content mouse brain
+***
 
-```{r fig.width=12, fig.height=9}
+```{r fig.width=10, fig.height=3}
 
-library(ggbreak)
-
-gene_annotations <- read.table(file = "../../genes/mgenes.tsv", header = TRUE)
+gene_annotations <- read.table(file = "sheets/mgenes.tsv", header = TRUE)
 rownames(gene_annotations) <- gene_annotations$gene_name
 
 # rename gene type for mitochondrial and ribosomal protein coding genes
@@ -230,24 +243,24 @@ gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% mt.genes, "
 
 gene_attr$gene_type <- gene_annotations[rownames(gene_attr), "gene_type"]
 gene_attr <- gene_attr %>%
-  mutate(observed_in = case_when(RNA_rescue_count > 0 & standard_count > 0 ~ "both",
-                                 RNA_rescue_count > 0 & standard_count == 0 ~ "RNA_rescue",
-                                 RNA_rescue_count == 0 & standard_count > 0 ~ "standard")) %>%
+  mutate(observed_in = case_when(RRST_count > 0 & standard_count > 0 ~ "both",
+                                 RRST_count > 0 & standard_count == 0 ~ "RRST",
+                                 RRST_count == 0 & standard_count > 0 ~ "standard")) %>%
   mutate(gene = rownames(.))
 
 lvls <- gene_attr %>% 
            group_by(gene_type) %>% 
-           summarize(tot = sum(RNA_rescue_count + standard_count)) %>% 
+           summarize(tot = sum(RRST_count + standard_count)) %>% 
            arrange(-tot) %>% 
            pull(gene_type)
 
 gene_attr_summarized <- gene_attr %>% 
-               reshape2::melt(measure.vars = c("RNA_rescue_count", "standard_count")) %>%
+               reshape2::melt(measure.vars = c("RRST_count", "standard_count")) %>%
                filter(value > 0) %>%
                group_by(gene_type, variable) %>% 
                summarize(totTranscript = n(), totCount = sum(value)) %>%
                mutate(gene_type = factor(gene_type, levels = lvls), 
-                      variable = ifelse(variable == "RNA_rescue_count", "RR-seq", "standard"))
+                      variable = ifelse(variable == "RRST_count", "RRST", "standard"))
 
 gene_attr_prop <- gene_attr %>% 
   group_by(gene_type, observed_in) %>%
@@ -288,62 +301,44 @@ p3 <- ggplot(gene_attr_summarized,
         legend.title = element_text(size = 14, colour = "black")) +
   labs(y = "UMI count", fill = "")
 
+p1
+p2
+p3
 
-jpeg("../Suppl_Figure_1/mousebrain_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
+```
+
+```{r eval=FALSE}
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/mousebrain_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p1)
 dev.off()
-jpeg("../Suppl_Figure_1/mousebrain_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/mousebrain_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p2)
 dev.off()
-jpeg("../Suppl_Figure_1/mousebrain_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/mousebrain_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p3)
 dev.off()
 
 ```
 
-
-
-## Prostate cancer
-***
-
-Load prostate cancer data
+Load prostate cancer data (2xRRST and 2xstandard)
 
 ```{r}
 
-PC_infoTable <- subset(infoTable, source == "prostatecancer")
-PC_infoTable <- subset(PC_infoTable, include == "yes")
+PC_infoTable <- subset(infoTable, source == "prostate cancer")
 PC <- InputFromTable(infotable = PC_infoTable[c(3:4, 1:2), ])
 
 ```
 
+Prostate cancer H&E images
 
-```{r}
+```{r fig.width=8, fig.height=2}
 
-VlnPlot(PC, features = "nFeature_RNA", group.by = "arrayID", split.by = "protocol")
-
-```
-
-```{r}
-
-PC <- LoadImages(PC, time.resolve = FALSE, xdim = 1e3)
+PC <- LoadImages(PC, time.resolve = FALSE)
+ImagePlot(PC, ncols = 4)
 
 ```
 
-
-```{r}
-
-# Prepare data for rigid transformation
-st.object <- GetStaffli(PC)
-msks <- lapply(st.object@rasterlists$raw, function(im) {
-  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
-})
-st.object@rasterlists$masked <- st.object@rasterlists$raw
-st.object@rasterlists$masked.masks <- msks
-PC@tools$Staffli <- st.object
-
-```
-
-Apply transformations
+Apply rigid transformations. 
 
 ```{r}
 
@@ -351,16 +346,15 @@ Apply transformations
 PC <- WarpImages(PC, verbose = TRUE, transforms = list("1" = list(shift.y = -130), "3" = list(angle = 180)))
 ```
 
-Spatial plot
+## b - Spatial map of unique genes per spot [prostate cancer]
+***
 
-```{r fig.width=8, fig.height=4}
+```{r fig.width=8, fig.height=5}
 
-#p <- FeatureOverlay(PC, features = "nFeature_RNA", ncols = 2, sampleids = c(2, 3), palette = "viridis", 
-#                    label.by = "protocol", value.scale = "all", pt.size = 1.2, show.sb = FALSE) &
-#  theme(plot.title = element_blank(), legend.position = "top", legend.text = element_text(angle = 60, hjust = 1)) &
-#  labs(fill = "unique genes")
+PC$protocol <- PC[[]] %>%
+  mutate(protocol = ifelse(protocol == "RNA rescue", "RRST", protocol)) %>%
+  pull(protocol)
 
-# PC$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[PC$protocol]
 
 p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2), 
                     label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
@@ -370,13 +364,21 @@ p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2),
         strip.text = element_text(size = 18, face = "bold", colour = "black")) &
   labs(fill = "unique genes")
 
-jpeg(filename = "prostatecancer_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
+p
+
+```
+
+```{r eval=FALSE}
+
+# Export plot
+jpeg(filename = "plots/prostatecancer_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
 print(p)
 dev.off()
 
 ```
 
-Violin plot
+## c - Violin plots of unique genes per spot [mousebrain]
+***
 
 ```{r}
 
@@ -396,13 +398,19 @@ p <- ggplot(PC[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
   guides(fill = "none") +
   scale_x_discrete(labels = c("", "Rep1", "Rep2"))
 
-jpeg(filename = "prostatecancer_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
+p
+
+```
+
+```{r eval=FALSE}
+
+jpeg(filename = "plots/prostatecancer_unique_genes_violin.jpg", width = 2000, height = 900, res = 300)
 print(p)
 dev.off()
 
 ```
 
-Compare gene attributes
+Compute gene attributes
 
 ```{r}
 
@@ -419,10 +427,21 @@ gene_attr <- gene_attr %>%
 
 ```
 
-```{r fig.width=8, fig.height=4}
+
+Subset genes to include those available in the Visium FFPE probe set.
+
+```{r}
 
 human_probes <- read.csv("../../sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
 human_probes$gene_name <- do.call(rbind, strsplit(human_probes$probe_id, "\\|"))[, 2]
+
+```
+
+## d - Gene-gene scatter plot of detection rate and UMI counts [prostate cancer]
+***
+
+
+```{r fig.width=8, fig.height=4}
 
 p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% subset(gene %in% human_probes$gene_name), aes_string("standard_log_count", "RRST_log_count")) +
   geom_point(size = 0.3) +
@@ -443,24 +462,26 @@ p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RRST_det_rate")) +
   theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
-p <- p1 | p2
-p
+p1 + p2
 
-jpeg(filename = "prostatecancer_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
+```
+
+```{r eval=FALSE}
+
+jpeg(filename = "plots/prostatecancer_gene_scatter_counts.jpg", width = 1000, height = 1000, res = 300)
 print(p1)
 dev.off()
-jpeg(filename = "prostatecancer_gene_scatter_det_rate.jpg", width = 1000, height = 1000, res = 300)
+jpeg(filename = "plots/prostatecancer_gene_scatter_det_rate.jpg", width = 1000, height = 1000, res = 300)
 print(p2)
 dev.off()
 
 ```
 
-### Supplementary figure
+
+## Supplementary figure - biotype content prostate cancer
 ***
 
-```{r eval=FALSE}
-
-library(ggbreak)
+```{r fig.width=10, fig.height=3}
 
 gene_annotations <- read.table(file = "../../genes/hgenes.tsv", header = TRUE)
 rownames(gene_annotations) <- gene_annotations$gene_name
@@ -473,26 +494,26 @@ gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% mt.genes, "
 
 gene_attr$gene_type <- gene_annotations[rownames(gene_attr), "gene_type"]
 gene_attr <- gene_attr %>%
-  mutate(observed_in = case_when(RNA_rescue_count > 0 & standard_count > 0 ~ "both",
-                                 RNA_rescue_count > 0 & standard_count == 0 ~ "RNA_rescue",
-                                 RNA_rescue_count == 0 & standard_count > 0 ~ "standard")) %>%
+  mutate(observed_in = case_when(RRST_count > 0 & standard_count > 0 ~ "both",
+                                 RRST_count > 0 & standard_count == 0 ~ "RNA_rescue",
+                                 RRST_count == 0 & standard_count > 0 ~ "standard")) %>%
   mutate(gene = rownames(.))
 
 gene_attr <- subset(gene_attr, !gene_type %in% c("IG_C_pseudogene", "TR_V_pseudogene"))
 
 lvls <- gene_attr %>% 
            group_by(gene_type) %>% 
-           summarize(tot = sum(RNA_rescue_count + standard_count)) %>% 
+           summarize(tot = sum(RRST_count + standard_count)) %>% 
            arrange(-tot) %>% 
            pull(gene_type)
 
 gene_attr_summarized <- gene_attr %>% 
-               reshape2::melt(measure.vars = c("RNA_rescue_count", "standard_count")) %>%
+               reshape2::melt(measure.vars = c("RRST_count", "standard_count")) %>%
                filter(value > 0) %>%
                group_by(gene_type, variable) %>% 
                summarize(totTranscript = n(), totCount = sum(value)) %>%
                mutate(gene_type = factor(gene_type, levels = lvls), 
-                      variable = ifelse(variable == "RNA_rescue_count", "RR-seq", "standard"))
+                      variable = ifelse(variable == "RRST_count", "RRST", "standard"))
 
 gene_attr_prop <- gene_attr %>% 
   group_by(gene_type, observed_in) %>%
@@ -533,15 +554,42 @@ p3 <- ggplot(gene_attr_summarized,
         legend.title = element_text(size = 14, colour = "black")) +
   labs(y = "UMI count", fill = "")
 
+p1
+p2
+p3
 
-jpeg("../Suppl_Figure_1/prostatecancer_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
+```
+
+```{r eval=FALSE}
+
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/prostatecancer_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p1)
 dev.off()
-jpeg("../Suppl_Figure_1/prostatecancer_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer//prostatecancer_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p2)
 dev.off()
-jpeg("../Suppl_Figure_1/prostatecancer_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer//prostatecancer_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p3)
 dev.off()
 
 ```
+
+# date
+***
+
+```{r}
+
+date()
+
+```
+
+# Session
+***
+
+```{r}
+
+sessionInfo()
+
+```
+
+

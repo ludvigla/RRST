@@ -35,7 +35,7 @@ infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$sample
 curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
                                                        "project", "experimenter", "processer", "comments",
-                                                       "ID", "paper_id", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",
@@ -142,18 +142,22 @@ p <- LNG[[]] %>% ggplot(aes(nFeature_RNA, fill = ifelse(nFeature_RNA < 300, "dis
   geom_histogram(binwidth = 100) +
   geom_vline(xintercept = 300, linetype = "longdash") +
   facet_grid(protocol~ID, scales = "free", 
-             labeller = labeller(protocol = c("RNA rescue" = "sRR-seq", "standard" = "standard"), 
-                                 ID = c("P583-B-LNG3" = "ID: 1", "P640-C-LNG5" = "ID: 2"))) +
+             labeller = labeller(protocol = c("RNA rescue" = "RRST", "standard" = "standard"), 
+                                 ID = c("P583-B-LNG3" = "LNG1", "P640-C-LNG5" = "LNG2"))) +
   labs(fill = "", x = "Unique genes", y = "Count") +
   scale_x_continuous(breaks = c(0, 300, 2000, 4000, 6000), minor_breaks = NULL) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        axis.text = element_text(size = 10, colour = "black"),
+        axis.title = element_text(size = 14, colour = "black"),
+        strip.text = element_text(size = 14, colour = "black", face = "bold"),
+        legend.text = element_text(size = 10, colour = "black"))
 
-pdf(file = "../Suppl_Figure_2/Suppl_Figure_2.pdf", width = 12, height = 8)
+pdf(file = "../Suppl_figures/Suppl_Figure_filter_lung_data/Suppl_Figure_2.pdf", width = 10, height = 7)
 print(p)
 dev.off()
 
-png(filename = "../Suppl_Figure_2/Suppl_Figure_2.png", width = 2400, height = 1600, res = 300)
+png(filename = "../Suppl_figures/Suppl_Figure_filter_lung_data/Suppl_Figure_2.png", width = 2400, height = 1600, res = 300)
 print(p)
 dev.off()
 

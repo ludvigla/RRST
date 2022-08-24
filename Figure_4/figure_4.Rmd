@@ -16,6 +16,8 @@ Load libraries
 library(STutility)
 library(ggplot2)
 library(ggpubr)
+library(dplyr)
+library(magrittr)
 
 ```
 
@@ -35,7 +37,7 @@ infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$sample
 curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
                                                        "project", "experimenter", "processer", "comments",
-                                                       "ID", "paper_id", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",
@@ -134,15 +136,7 @@ SI@meta.data[submucosa_13, "labels"] <- "submucosa"
 ```
 
 
-```{r fig.width=12, fig.height=10,  eval=FALSE}
-
-ST.FeaturePlot(SI, features = "labels", ncol = 4, label.by = "time")
-
-```
-
-
-
-### Filter out background and serosa
+### Filter out background
 ***
 
 ```{r eval=FALSE}
@@ -180,7 +174,10 @@ gene_attr <- do.call(rbind, lapply(levels(SI$time), function(i) {
   data.frame(gene = names(x), count = x, gene_type = ensids[names(x), "gene_type"], time = i)
 }))
 
-gene_attr <- gene_attr %>% group_by(time, gene_type) %>% summarize(N = sum(count)) %>% group_by(time) %>% mutate(p = N/sum(N)) %>%
+gene_attr <- gene_attr %>% group_by(time, gene_type) %>% 
+  summarize(N = sum(count)) %>% 
+  group_by(time) %>% 
+  mutate(p = N/sum(N)) %>%
   mutate(gene_type = factor(ifelse(gene_type %in% c("IG_C_gene", "IG_J_gene", "IG_V_gene",
                           "TR_C_gene", "TR_J_gene", "TR_V_gene",
                           "lncRNA", "protein_coding", "rb_protein_coding",
@@ -207,6 +204,12 @@ p <- ggplot(gene_attr, aes(x = "", y = p, fill = gene_type)) +
 pdf(file = "biotype_content.pdf", width = 6, height = 6)
 print(p)
 dev.off()
+
+```
+
+```{r fig.width=12, fig.height=10,  eval=FALSE}
+
+# ST.FeaturePlot(SI, features = "labels", ncol = 4, label.by = "time")
 
 ```
 
@@ -553,10 +556,6 @@ ST.FeaturePlot(SI, features = "mucosa_bg", indices = c(2, 9, 13), cols = c("muco
 DotPlot(SI, features = de.markers$gene[1:10])
 
 ```
-
-
-
-
 
 
 # date

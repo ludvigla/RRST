@@ -10,7 +10,84 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+
 library(STutility)
+library(magrittr)
+library(dplyr)
+
+```
+
+Create raw Seurat object
+
+```{r}
+
+samples <- list.files(path = "../../spaceranger_output/mousebone", pattern = "filtered", recursive = TRUE, full.names = TRUE)
+imgs <- list.files(path = "../../spaceranger_output/mousebone", pattern = "tissue_hires_image.png", recursive = TRUE, full.names = TRUE)
+spotfiles <- list.files(path = "../../spaceranger_output/mousebone", pattern = "tissue_positions_list.csv", recursive = TRUE, full.names = TRUE)
+json <- list.files(path = "../../spaceranger_output/mousebone", pattern = "scalefactors_json.json", recursive = TRUE, full.names = TRUE)
+
+infoTable <- data.frame(samples, imgs, spotfiles, json)
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
+
+curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
+                                                       "project", "experimenter", "processer", "comments",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", 
+                                                      "source", "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
+
+```
+
+```{r}
+
+se <- InputFromTable(infoTable)
+
+```
+
+Violin plots
+
+```{r}
+
+se$protocol <- se[[]] %>%
+  mutate(protocol = ifelse(protocol == "RNA rescue", "RRST", protocol)) %>%
+  pull(protocol)
+se$paper_id <- se[[]] %>%
+  mutate(paper_id = factor(paper_id, levels = c("P4", "P11"))) %>%
+  pull(paper_id)
+
+p_violin <- ggplot() + 
+  geom_violin(data = se[[]], aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") +
+  geom_jitter(size = 0.1) +
+  labs(x = "", y = "Unique genes") +
+  geom_hline(data = se[[]] %>% 
+               group_by(protocol, paper_id) %>%
+               summarize(Mean = mean(nFeature_RNA)), aes(yintercept = Mean), linetype = "longdash") +
+  geom_label(data = se[[]] %>% 
+               group_by(protocol, paper_id) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), aes("A", Mean, label = Mean, fill = protocol),
+             show.legend = FALSE, size = 5) +
+  facet_wrap(paper_id~., scales = "free", ncol = 1) +
+  scale_y_log10() +
+  scale_x_discrete(labels = c("", "Rep1", "Rep1", "Rep2")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), legend.position = "none", 
+        strip.text = element_text(size = 16, colour = "black", face = "bold"),
+        axis.text = element_text(size = 14, colour = "black"),
+        axis.title = element_text(size = 16, colour = "black", face = "bold"))
+
+pdf(file = "violin_QC.pdf", width = 5.5, height = 8)
+print(p_violin)
+dev.off()
+
 ```
 
 Load Seurat object
@@ -53,6 +130,7 @@ for (i in c("2", "4")) {
 
 ```
 
+
 Plot selected area
 
 ```{r}
@@ -61,18 +139,24 @@ limits_list <- list("4" = c(x_start = 480, y_start = 330, x_end = 480 + 1100, y_
                     "2" = c(x_start = 624, y_start = 621, x_end = 624 + 1150, y_end = 621 + 1150))
 factor_limits <- apply(BN@reductions$NMF@cell.embeddings, 2, max)
 
+gg <- cbind(BN[[]], GetStaffli(BN)@meta.data, BN@reductions$NMF@cell.embeddings) %>%
+    reshape2::melt(measure.vars = colnames(BN@reductions$NMF@cell.embeddings)) %>%
+    group_by(variable) %>%
+    mutate(value = ifelse(value < quantile(value, 0.99), value, quantile(value, 0.99)))
+factor_limits <- gg %>%
+    summarize(max = max(value))
+factor_limits <- setNames(factor_limits$max, nm = factor_limits$variable)
+
 factorplots <- setNames(lapply(c("2", "4"), function(i) {
   
   # Get meta data and coordinates
-  gg <- cbind(BN[[]], GetStaffli(BN)@meta.data, BN@reductions$NMF@cell.embeddings)
   gg <- subset(gg, sample == i) %>%
-    reshape2::melt(measure.vars = colnames(BN@reductions$NMF@cell.embeddings)) %>%
     group_by(variable) %>%
     mutate(alpha = scales::rescale(value))
   dims <- GetStaffli(BN)@dims[[i]]
   
   # Get H&E image
-  im <- GetStaffli(BN)@rasterlists$processed[[paste0(i)]]
+  im <- GetStaffli(BN)@rasterlists$processed[[i]]
   sf <- nrow(im)/dims$height
   im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
   g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
@@ -87,16 +171,17 @@ factorplots <- setNames(lapply(c("2", "4"), function(i) {
       scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
       scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
       labs(fill = "factor\nactivity") +
-      scale_fill_gradientn(colours = c("darkblue", "cyan", "yellow", "red", "darkred"), limits = c(0, factor_limits[fctr]))
+      scale_fill_gradientn(colours = viridis::viridis(n = 11), limits = c(0, factor_limits[fctr]))
   
     if (i == "2") {
       p <- p +
         theme(legend.position = "top", 
             legend.title = element_text(size = 14, colour = "black"), 
-            legend.text = element_text(color = "black", size = 12), plot.margin = margin(t = 0, r = 0, b = 3, l = 0))
+            legend.text = element_text(color = "black", size = 12), 
+            plot.margin = margin(t = 0, r = 0, b = 3, l = 0))
     } else {
       p <- p + 
-        theme(legend.position = "none")
+        theme(legend.position = "none", plot.margin = margin(t = 0, r = 10, b = 3, l = 0))
     }
     
     p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
@@ -108,14 +193,134 @@ factorplots <- setNames(lapply(c("2", "4"), function(i) {
 
 
 factorloadings <- setNames(lapply(1:30, function(fctr) {
-  p <- FactorGeneLoadingPlot(BN, factor = fctr, topn = 20) +
-    theme(axis.title = element_blank(), axis.text = element_text(size = 14, color = "black"))
+  p <- FactorGeneLoadingPlot(BN, factor = fctr, topn = 40) +
+    theme(axis.title = element_blank(), axis.text = element_text(size = 14, color = "black")) +
+    labs(title = paste0("factor_", fctr))
   return(p)
 }), nm = paste0("factor_", 1:30))
 
 ```
 
-## Figure 4
+## Figure 6A - Phillips version
+***
+
+```{r}
+
+design <- c(
+  patchwork::area(1, 1, 2, 2),
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 3, 2, 3),
+  patchwork::area(2, 4, 2, 4),
+  
+  patchwork:::area(3, 1, 3, 4),
+  
+  patchwork::area(4, 1, 4, 1),
+  patchwork::area(4, 2, 4, 2),
+  patchwork::area(5, 1, 5, 1),
+  patchwork::area(5, 2, 5, 2),
+  
+  patchwork::area(4, 3, 4, 3),
+  patchwork::area(4, 4, 4, 4),
+  patchwork::area(5, 3, 5, 3),
+  patchwork::area(5, 4, 5, 4)
+)
+
+p <- patchwork::plot_spacer() +
+  factorplots$`2`$factor_12 +
+  factorplots$`2`$factor_2 +
+  factorplots$`4`$factor_12 +
+  factorplots$`4`$factor_2 +
+  patchwork::plot_spacer() +
+  factorplots$`2`$factor_1 +
+  factorplots$`2`$factor_11 +
+  factorplots$`4`$factor_1 +
+  factorplots$`4`$factor_11 +
+  factorplots$`2`$factor_6 +
+  factorplots$`2`$factor_7 +
+  factorplots$`4`$factor_6 +
+  factorplots$`4`$factor_7 +
+  patchwork::plot_layout(design = design, heights = c(1, 1, 0.3, 1, 1))
+p
+
+pdf(file = "figure_6A_patchwork.pdf", width = 12, height = 15)
+print(p)
+dev.off()
+
+```
+
+## Figure 6B
+***
+
+```{r fig.height=8, fig.width=3}
+
+de.markers.all.data.bone.annotations <- readRDS(file = "../../doc/analysis/R_objects/de.markers.all.data.bone.annotations")
+se.filtered.bone <- readRDS("../../doc/analysis/R_objects/mBone_Seurat_object_filtered_bone")
+se.filtered.bone$annotation <- factor(se.filtered.bone$annotation, levels = c("resting zone", "proliferative zone",
+                                              "pre-Hypertrophic zone", "hypertrophic zone",
+                                              "SOC", "SOC-adjacent resting zone", "articular cartilage"))
+se.filtered.bone <- SetIdent(se.filtered.bone, value = "annotation")
+
+arr_df <- de.markers.all.data.bone.annotations %>% 
+  subset(avg_log2FC > 0.6) %>% 
+  # subset(!cluster %in% "articular cartilage") %>%
+  mutate(cluster = factor(cluster, levels = c("resting zone", "proliferative zone",
+                                              "pre-Hypertrophic zone", "hypertrophic zone",
+                                              "SOC", "SOC-adjacent resting zone", "articular cartilage"))) %>%
+  group_by(cluster) %>%
+  slice_head(n = 15) %>%
+  arrange(cluster, -avg_log2FC)
+
+genes <- arr_df %>%
+  pull(gene) %>% 
+  rev() 
+
+p_dotplot <- DotPlot(se.filtered.bone, features = unique(genes)) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_color_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "RdBu") %>% rev()) +
+  theme(axis.title = element_blank())
+
+pdf(file = "annotation_markers_dotplot.pdf", width = 6, height = 12)
+print(p_dotplot)
+dev.off()
+
+```
+
+## Suppl figure - factor gene loadings
+***
+
+```{r}
+
+design <- c(
+  patchwork::area(1, 1, 1, 1),
+  patchwork::area(1, 2, 1, 2),
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 1, 2, 4),
+  patchwork::area(3, 1, 3, 1),
+  patchwork::area(3, 2, 3, 2)
+)
+
+p <- 
+  factorloadings$factor_12 +
+  factorloadings$factor_2 +
+  factorloadings$factor_1 +
+  factorloadings$factor_11 +
+  patchwork::plot_spacer() +
+  factorloadings$factor_6 +
+  factorloadings$factor_7 +
+  patchwork::plot_layout(design = design, heights = c(1, 0.3, 1))
+p
+
+pdf(file = "../Suppl_figures/Suppl_Figure_factor_loadings/factor_loadings.pdf", width = 15, height = 18)
+print(p)
+dev.off()
+
+```
+
+
+## Figure 6 - first draft
 ***
 
 ```{r}

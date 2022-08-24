@@ -1,0 +1,342 @@
+---
+title: "Figure 4"
+author: "Ludvig Larsson"
+date: '2022-08-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r eval=FALSE}
+
+library(STutility)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(magrittr)
+
+```
+
+Assemble spaceranger output files and merge curated meta data
+
+```{r eval=FALSE}
+
+# Mouse brain
+samples <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/filtered_feature_bc_matrix.h5")
+imgs <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/tissue_hires_image.png")
+spotfiles <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/tissue_positions_list.csv")
+json <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/scalefactors_json.json")
+
+infoTable <- data.frame(samples, imgs, spotfiles, json)
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
+
+curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
+                                                       "project", "experimenter", "processer", "comments",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
+
+```
+
+Load data into a Seurat object
+
+
+```{r eval=FALSE}
+
+CBT <- InputFromTable(infoTable)
+
+```
+
+```{r eval=FALSE, fig.width=12, fig.height=8}
+
+CBT$protocol_array <- paste0(CBT$protocol, " : ", CBT$arrayID)
+ST.FeaturePlot(CBT, features = "nFeature_RNA", ncol = 4, label.by = "protocol_array", show.sb = FALSE, pt.size = 1.5)
+
+```
+
+Load images
+
+```{r eval=FALSE}
+
+CBT <- LoadImages(CBT, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+```{r}
+
+ImagePlot(CBT, method = "raster", ncols = 4, type = "raw")
+
+```
+
+
+Add empty masks for downstream processing of HE images
+
+```{r eval=FALSE}
+
+# Prepare data for rigid transformation
+st.object <- GetStaffli(CBT)
+msks <- lapply(st.object@rasterlists$raw, function(im) {
+  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
+})
+st.object@rasterlists$masked <- st.object@rasterlists$raw
+st.object@rasterlists$masked.masks <- msks
+CBT@tools$Staffli <- st.object
+
+```
+
+
+Apply transformations
+
+```{r eval=FALSE}
+
+# Warp transform
+CBT <- WarpImages(CBT, verbose = TRUE, transforms = list("2" = list(shift.y = 40*2.5),
+                                                         "3" = list(shift.y = 40*2.5),
+                                                         "4" = list(shift.y = 40*2.5),
+                                                         "6" = list(shift.y = 20*2.5),
+                                                         "7" = list(shift.y = 30*2.5, shift.x = -30*2.5),
+                                                         "8" = list(shift.x = 20*2.5)))
+
+```
+
+```{r}
+
+p_violin <- ggplot() + 
+  geom_violin(data = CBT[[]], 
+              aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") + 
+  geom_hline(data = CBT[[]] %>% group_by(protocol, paper_id) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), 
+             aes(yintercept = Mean), linetype = "longdash") +
+  geom_label(data = CBT[[]] %>% group_by(protocol, paper_id) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), 
+             aes("A", Mean, label = Mean), size = 7) +
+  facet_grid(~paper_id, scales = "free", space = "free", 
+             labeller = labeller(paper_id = c("1.0" = "medulloblastoma", "2.0" = "NOS"))) +
+  scale_x_discrete(labels = c("", "Rep1", "Rep2", "Rep1", "Rep2")) +
+  scale_y_log10() +
+  #scale_fill_brewer(palette = "Pastel2") +
+  labs(x = "", y = "") +
+  theme(panel.background = element_rect(fill = "white"), panel.grid = element_line(colour = "lightgray", size = 0.5), 
+        strip.text = element_text(size = 16, colour = "black"), 
+        axis.text = element_text(size = 16, colour = "black"), 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_text(size = 16, colour = "black"), 
+        legend.position = "bottom")
+
+pdf(file = "unique_genes_overview.pdf", width = 8, height = 6)
+print(p_violin)
+dev.off()
+
+```
+
+Spatial unique genes plots
+
+```{r}
+
+# Spatial plots showing the number of unique genes
+df_subset <- cbind(CBT[[]], GetStaffli(CBT)@meta.data) %>%
+  subset(sample %in% c("1", "3", "5", "7"))
+scale_limits <- c(0, max(df_subset$nFeature_RNA))
+x_limits <- range(df_subset$warped_x)
+y_limits <- range(df_subset$warped_y)
+p_spatial <- df_subset %>%
+    ggplot(aes(warped_x, 2000 - warped_y, color = nFeature_RNA)) +
+      geom_point(size = 1) +
+      facet_wrap(paper_id ~ protocol, labeller = labeller(paper_id = c("1.0" = "CBT1", "2.0" = "CBT2")), ncol = 4) +
+      theme_void() +
+      labs(color = "Unique\ngenes") +
+      scale_color_gradientn(colours = viridis::magma(n = 11, direction = -1), limits = scale_limits) +
+      scale_x_continuous(limits = x_limits, expand = c(0, 0)) +
+      scale_y_continuous(limits = c(2000 - y_limits[2], 2000 - y_limits[1]), expand = c(0, 0)) +
+      theme(strip.text = element_blank(), 
+            panel.background = element_rect(colour = "lightgray", size = 2),
+            legend.text = element_text(size = 14, colour = "black"),
+            legend.title = element_text(size = 16, colour = "black"))
+p_spatial <- ggrastr::rasterize(p_spatial, layers = "Point", dpi = 300)
+
+# HE images
+plots_HE <- lapply(c("1", "3", "5", "7"), function(i) {
+  im <- GetStaffli(CBT)@rasterlists$processed[[i]]
+   
+  im <- im[round(y_limits[1]*0.5):round( y_limits[2]*0.5), round(x_limits[1]*0.5):round(x_limits[2]*0.5)]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    theme_void() +
+    theme(plot.margin = margin(t = 1, r = 5, b = 1, l = 5))
+  return(p)
+})
+
+```
+
+Create patchwork for HE and spatial visualization of unique genes per spot
+
+```{r}
+
+design <- c(
+  patchwork::area(1, 1, 1, 1),
+  patchwork::area(1, 2, 1, 2),
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 1, 2, 4)
+)
+
+# Create patchwork
+p_HE <- plots_HE[[3]] +
+  plots_HE[[1]] +
+  plots_HE[[4]] +
+  plots_HE[[2]] +
+  p_spatial +
+  patchwork::plot_layout(design = design)
+
+pdf(file = "HE_overivew.pdf", width = 14, height = 6)
+print(p_HE)
+dev.off()
+
+```
+
+Read annotations
+
+```{r}
+
+annotations <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/Pathology*")
+
+ann <- do.call(rbind, lapply(seq_along(annotations), function(i) {
+  a <- setNames(read.csv(file = annotations[i]), nm = c("barcode", "type"))
+  a <- data.frame(a, row.names = 1)
+  rownames(a) <- paste0(rownames(a), "_", i + 4)
+  return(a)
+}))
+
+CBT$annotation <- ann[colnames(CBT), "type"]
+CBT$annotation[CBT$annotation == "N/A"] <- "unassigned"
+
+```
+
+Plot annotations
+
+```{r fig.width=5, fig.height=5}
+
+p <- FeatureOverlay(CBT, features = "annotation", sampleids = 5, show.sb = FALSE) &
+  theme(plot.title = element_blank(), plot.subtitle = element_blank())
+
+im <- GetStaffli(CBT)@rasterlists$processed[[5]]
+im <- im[round(500*0.5):round( y_limits[2]*0.5), round(x_limits[1]*0.5):round(x_limits[2]*0.5)]
+g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+p <- ggplot() +
+  annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+  geom_point(data = cbind(CBT[[]], GetStaffli(CBT)@meta.data) %>% subset(sample == "5"), 
+             aes(warped_x, 2000 - warped_y, color = annotation), alpha = 1) +
+  scale_x_continuous(limits = x_limits, expand = c(0, 0)) +
+  scale_y_continuous(limits = c(2000 - y_limits[2], 2000 - 500), expand = c(0, 0)) +
+  scale_color_manual(values = c("tumor" = "#117733", "stroma" = "#DDCC77", "unassigned" = "lightgrey")) +
+  theme_void() +
+  guides(colour = guide_legend(override.aes = list(size = 5))) +
+  theme(plot.margin = margin(t = 1, r = 5, b = 1, l = 5), 
+        legend.position = "bottom", 
+        legend.text = element_text(size = 14, colour = "black"),
+        legend.title = element_blank())
+p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+
+pdf(file = "medulloblastoma_annotations.pdf", width = 5, height = 4.2)
+print(p)
+dev.off()
+
+
+```
+
+
+Subset data to include medulloblastoma only
+
+```{r fig.width=8, fig.height=3}
+
+CBT_medulloblastoma <- SubsetSTData(CBT, expression = paper_id == "1.0")
+CBT_medulloblastoma <- CBT_medulloblastoma %>%
+  NormalizeData() %>%
+  ScaleData() %>%
+  FindVariableFeatures()
+ST.FeaturePlot(CBT_medulloblastoma, features = "AXIN2", ncol = 4, show.sb = FALSE)
+
+```
+
+Visualize marker genes
+
+```{r fig.width=12, fig.height=7}
+
+WNT_markers <- c("SP5", "AXIN2", "LEF1", "DKK4", "GAD1", "CTNNB1")
+
+p_markers <- cbind(CBT_medulloblastoma[[]], FetchData(CBT_medulloblastoma, vars = WNT_markers)) %>%
+  reshape2::melt(measure.vars = WNT_markers) %>%
+  ggplot(aes(arrayID, value, fill = protocol)) +
+    geom_violin(scale = "width") +
+    scale_x_discrete(labels = c("Rep1", "Rep2", "Rep1", "Rep2")) +
+    facet_wrap(~variable, ncol = 3) +
+    theme(panel.background = element_rect(fill = "white"),
+          panel.grid = element_line(linetype = "longdash", colour = "lightgrey"),
+          strip.text = element_text(size = 14, colour = "black"),
+          axis.text.x = element_text(size = 12, colour = "black"),
+          axis.text.y = element_text(size = 14, colour = "black"),
+          axis.title = element_text(size = 16, colour = "black")) +
+  #scale_fill_brewer(palette = "Pastel2") +
+  labs(y = "Norm. Expr.", x = "")
+p_markers
+
+pdf(file = "violin_markers.pdf", width = 8, height = 5)
+print(p_markers)
+dev.off()
+
+```
+
+
+Visualize pathway activities
+
+```{r}
+
+read.gmt <- function(filename) {
+  d <- suppressWarnings({(readLines(filename) %>% strsplit("\t"))[[1]]})
+  setNames(list(d[3:length(d)]), nm = d[1])
+}
+
+WNT_genes <- read.gmt(filename = "pathway_gmt_files/HALLMARK_WNT_BETA_CATENIN_SIGNALING.v7.5.1.gmt")
+TGFB_genes <- read.gmt(filename = "pathway_gmt_files/HALLMARK_TGF_BETA_SIGNALING.v7.5.1.gmt")
+
+```
+
+```{r fig.width=5, fig.height=5}
+
+CBT_medulloblastoma <- AddModuleScore(CBT_medulloblastoma, features = c(WNT_genes, TGFB_genes), name = "pathway")
+
+p_pathway <- cbind(CBT_medulloblastoma[[]], GetStaffli(CBT_medulloblastoma)@meta.data) %>%
+  subset(sample %in% c("1", "3")) %>%
+  reshape2::melt(measure.vars = c("pathway2", "pathway1")) %>%
+  mutate(value = ifelse(value > quantile(value, 0.99), quantile(value, 0.99), value)) %>%
+  ggplot(aes(warped_x, 2000 - warped_y, color = value)) +
+    geom_point(size = 1) +
+    facet_wrap(variable ~ protocol) +
+    scale_color_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "Spectral") %>% rev()) +
+    theme_void() +
+    theme(strip.text = element_blank(), panel.background = element_rect(colour = "lightgrey", size = 2),
+          legend.text = element_text(size = 14, colour = "black"),
+          legend.title = element_text(size = 16, colour = "black"))
+p_pathway <- ggrastr::rasterize(p_pathway, layers = "Point", dpi = 300)
+
+pdf(file = "pathway_spatial_plot.pdf", width = 8, height = 6.5)
+print(p_pathway)
+dev.off()
+
+```
+
+

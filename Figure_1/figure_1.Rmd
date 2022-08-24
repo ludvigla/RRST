@@ -105,22 +105,24 @@ Apply transformations
 ```{r}
 
 # Warp transform
-MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "2" = list(angle = -90), "3" = list(angle = 90), "4" = list(angle = 90),
-                                       "5" = list(angle = -90), "6" = list(angle = -90), "7" = list(angle = 90), "8" = list(angle = -90)))
+MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "2" = list(angle = -90), 
+                                                       "3" = list(angle = 90), "4" = list(angle = 90),
+                                                       "5" = list(angle = -90), "6" = list(angle = -90), 
+                                                       "7" = list(angle = 90), "8" = list(angle = -90)))
 ```
 
 Spatial plot
 
 ```{r fig.width=8, fig.height=4}
 
-MB$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[MB$protocol]
+# MB$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[MB$protocol]
 
-p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), 
-                    label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
+p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), show.sb = FALSE,
+                    label.by = "protocol",  pt.size = 1.2) &
   theme(plot.title = element_blank(), legend.position = "top", 
-        legend.text = element_text(angle = 60, hjust = 1, size = 10, colour = "black"),
-        legend.title = element_text(size = 15, colour = "black", vjust = 1),
-        strip.text = element_text(size = 14, face = "bold", colour = "black")) &
+        legend.text = element_text(angle = 60, hjust = 1, size = 14, colour = "black"),
+        legend.title = element_text(size = 18, face = "bold", colour = "black", vjust = 1),
+        strip.text = element_text(size = 18, face = "bold", colour = "black")) &
   labs(fill = "unique genes")
 
 jpeg(filename = "mousebrain_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
@@ -133,17 +135,18 @@ Violin plot
 
 ```{r}
 
+library(dplyr)
 p <- ggplot(MB[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
   geom_violin(scale = "width") +
   geom_boxplot(width = 0.3) +
   geom_hline(data = MB[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
              aes("", yintercept = Median, group = protocol), linetype = "longdash") +
-  geom_label(data = MB[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
+  geom_label(data = MB[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), size = 5,
              aes("", y = Median, group = protocol, label = Median)) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 10, colour = "black"), 
-        axis.text.y = element_text(size = 10, colour = "black"), 
-        strip.text = element_text(size = 13, face = "bold", colour = "black")) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 14, colour = "black"), 
+        axis.text.y = element_text(size = 14, colour = "black"), 
+        strip.text = element_text(size = 18, face = "bold", colour = "black")) +
   labs(y = "", x = "") +
   facet_grid(~protocol, scales = "free") +
   guides(fill = "none") +
@@ -159,7 +162,7 @@ Compare gene attributes
 
 ```{r}
 
-gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
+gene_attr <- do.call(cbind, lapply(c("RRST", "standard"), function(pro) {
   umis <- GetAssayData(MB, slot = "counts", assay = "RNA")[, MB$protocol %in% pro]
   gene_attr_protocol <- data.frame(rowSums(umis), rowMeans(umis > 0), row.names = rownames(umis))
   gene_attr_protocol <- setNames(gene_attr_protocol, nm = c(paste0(gsub(pattern = " ", replacement = "_", x = pro), "_count"), 
@@ -168,7 +171,7 @@ gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
 }))
 
 gene_attr <- gene_attr %>%
-  mutate("RNA_rescue_log_count" = log1p(`RNA_rescue_count`), "standard_log_count" = log1p(`standard_count`))
+  mutate("RRST_log_count" = log1p(`RRST_count`), "standard_log_count" = log1p(`standard_count`))
 
 ```
 
@@ -179,7 +182,7 @@ mouse_probes$gene_name <- do.call(rbind, strsplit(mouse_probes$probe_id, "\\|"))
 
 p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% 
                subset(gene %in% mouse_probes$gene_name), 
-             aes_string("standard_log_count", "RNA_rescue_log_count")) +
+             aes_string("standard_log_count", "RRST_log_count")) +
   geom_point(size = 0.3) +
   ggpubr::stat_cor(digits = 2) +
   scale_x_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
@@ -187,15 +190,15 @@ p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>%
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
   labs(x = "standard protocol", y = "RRST", title = "log1p(UMI counts)") +
   theme_minimal() +
-  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+  theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
-p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RNA_rescue_det_rate")) +
+p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RRST_det_rate")) +
   geom_point(size = 0.3) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
   labs(x = "standard protocol", y = "RRST", title = "detection rate") +
   theme_minimal() +
-  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+  theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
 p <- p1 + p2
@@ -357,14 +360,14 @@ Spatial plot
 #  theme(plot.title = element_blank(), legend.position = "top", legend.text = element_text(angle = 60, hjust = 1)) &
 #  labs(fill = "unique genes")
 
-PC$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[PC$protocol]
+# PC$protocol <- setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[PC$protocol]
 
 p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2), 
                     label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
   theme(plot.title = element_blank(), legend.position = "top", 
-        legend.text = element_text(angle = 60, hjust = 1, size = 10, colour = "black"),
-        legend.title = element_text(size = 15, colour = "black", vjust = 1),
-        strip.text = element_text(size = 14, face = "bold", colour = "black")) &
+        legend.text = element_text(angle = 60, hjust = 1, size = 14, colour = "black"),
+        legend.title = element_text(size = 18, face = "bold", colour = "black", vjust = 1),
+        strip.text = element_text(size = 18, face = "bold", colour = "black")) &
   labs(fill = "unique genes")
 
 jpeg(filename = "prostatecancer_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
@@ -385,9 +388,9 @@ p <- ggplot(PC[[]], aes(arrayID, nFeature_RNA, fill = protocol)) +
   geom_label(data = PC[[]] %>% dplyr::group_by(protocol) %>% summarize(Median = median(nFeature_RNA)), 
              aes("", y = Median, group = protocol, label = Median)) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 10, color = "black"), 
-        axis.text.y = element_text(size = 10, color = "black"), 
-        strip.text = element_text(size = 13, face = "bold", color = "black")) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 14, colour = "black"), 
+        axis.text.y = element_text(size = 14, colour = "black"), 
+        strip.text = element_text(size = 18, face = "bold", colour = "black")) +
   labs(y = "", x = "") +
   facet_grid(~protocol, scales = "free") +
   guides(fill = "none") +
@@ -403,7 +406,7 @@ Compare gene attributes
 
 ```{r}
 
-gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
+gene_attr <- do.call(cbind, lapply(c("RRST", "standard"), function(pro) {
   umis <- GetAssayData(PC, slot = "counts", assay = "RNA")[, PC$protocol %in% pro]
   gene_attr_protocol <- data.frame(rowSums(umis), rowMeans(umis > 0), row.names = rownames(umis))
   gene_attr_protocol <- setNames(gene_attr_protocol, nm = c(paste0(gsub(pattern = " ", replacement = "_", x = pro), "_count"), 
@@ -412,7 +415,7 @@ gene_attr <- do.call(cbind, lapply(c("RNA rescue", "standard"), function(pro) {
 }))
 
 gene_attr <- gene_attr %>%
-  mutate("RNA_rescue_log_count" = log1p(`RNA_rescue_count`), "standard_log_count" = log1p(`standard_count`))
+  mutate("RRST_log_count" = log1p(`RRST_count`), "standard_log_count" = log1p(`standard_count`))
 
 ```
 
@@ -421,23 +424,23 @@ gene_attr <- gene_attr %>%
 human_probes <- read.csv("../../sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
 human_probes$gene_name <- do.call(rbind, strsplit(human_probes$probe_id, "\\|"))[, 2]
 
-p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% subset(gene %in% human_probes$gene_name), aes_string("standard_log_count", "RNA_rescue_log_count")) +
+p1 <- ggplot(gene_attr %>% mutate(gene = rownames(.)) %>% subset(gene %in% human_probes$gene_name), aes_string("standard_log_count", "RRST_log_count")) +
   geom_point(size = 0.3) +
   ggpubr::stat_cor() +
-  scale_x_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
-  scale_y_continuous(limits = c(0, max(max(gene_attr$`RNA_rescue_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_x_continuous(limits = c(0, max(max(gene_attr$`RRST_log_count`), max(gene_attr$standard_log_count)))) +
+  scale_y_continuous(limits = c(0, max(max(gene_attr$`RRST_log_count`), max(gene_attr$standard_log_count)))) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
   labs(x = "standard protocol", y = "RRST", title = "log1p(UMI counts)") +
   theme_minimal() +
-  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+  theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
-p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RNA_rescue_det_rate")) +
+p2 <- ggplot(gene_attr, aes_string("standard_det_rate", "RRST_det_rate")) +
   geom_point(size = 0.3) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "longdash") +
   labs(x = "standard protocol", y = "RRST", title = "detection rate") +
   theme_minimal() +
-  theme(axis.text = element_text(size = 9, colour = "black"), axis.title = element_text(size = 12, colour = "black"),
+  theme(axis.text = element_text(size = 11, colour = "black"), axis.title = element_text(size = 14, colour = "black"),
         plot.title = element_text(size = 14, face = "bold", colour = "black"))
 
 p <- p1 | p2

@@ -105,6 +105,7 @@ CLN <- ManualAnnotation(CLN)
 
 ```{r}
 
+# Add labels
 pre_ann <- readRDS("data/CLN_metadata_selections")
 CLN@meta.data[rownames(pre_ann), "labels"] <- pre_ann[, "labels"]
 

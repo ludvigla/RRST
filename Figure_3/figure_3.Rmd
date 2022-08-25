@@ -11,17 +11,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load libraries
 
-```{r eval=FALSE}
+```{r warning=FALSE, message=FALSE}
 
 library(STutility)
 library(ggplot2)
 library(ggpubr)
+library(magrittr)
+library(dplyr)
 
 ```
 
 Assemble spaceranger output files and merge curated meta data
 
-```{r eval=FALSE}
+```{r}
 
 # Mouse brain
 samples <- Sys.glob(paths = "../../spaceranger_output/colon/*/filtered_feature_bc_matrix.h5")
@@ -51,14 +53,15 @@ infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
 
 Load data into a Seurat object
 
-
-```{r eval=FALSE}
+```{r}
 
 CLN <- InputFromTable(infoTable[c(5:6, 2, 4, 1, 3), ])
 
 ```
 
-```{r eval=FALSE, fig.width=10, fig.height=6}
+Check spatial distribution of unique genes
+
+```{r fig.width=10, fig.height=6}
 
 CLN$protocol_array <- paste0(CLN$protocol, " : ", CLN$arrayID)
 ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_array", show.sb = FALSE, pt.size = 1.5)
@@ -67,46 +70,32 @@ ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_ar
 
 Load images
 
-```{r eval=FALSE}
+```{r}
 
 CLN <- LoadImages(CLN, time.resolve = FALSE, xdim = 1e3)
 
 ```
 
-Add empty masks for downstream processing of HE images
 
-```{r eval=FALSE}
+Apply rigid transformations to make a rough alignment of the tissue sections.
 
-# Prepare data for rigid transformation
-st.object <- GetStaffli(CLN)
-msks <- lapply(st.object@rasterlists$raw, function(im) {
-  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
-})
-st.object@rasterlists$masked <- st.object@rasterlists$raw
-st.object@rasterlists$masked.masks <- msks
-CLN@tools$Staffli <- st.object
-
-```
-
-Apply transformations
-
-```{r eval=FALSE}
+```{r}
 
 # Warp transform
-CLN <- WarpImages(CLN, verbose = TRUE, transforms = list("1" = list(angle = -90), "2" = list(angle = -90, mirror.x = TRUE), "4" = list(angle = -90), "5" = list(angle = 180), "6" = list(angle = 180)))
+CLN <- WarpImages(CLN, verbose = TRUE, transforms = list("1" = list(angle = -90), 
+                                                         "2" = list(angle = -90, mirror.x = TRUE), 
+                                                         "4" = list(angle = -90), 
+                                                         "5" = list(angle = 180), 
+                                                         "6" = list(angle = 180)))
 
 ```
 
-Add a new metadata column with a combined protocol and lung ID label
+## Add manual annotations
+***
 
-```{r eval=FALSE}
+Here, the spots were labeled into three major categories: "mucosa", "submucosa" and "muscularis".
 
-CLN$protocol_sample <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$paper_id))
-ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_sample")
-
-```
-
-Add manual annotations
+The annotations are provided in an Rds file (see below)
 
 ```{r eval=FALSE}
 
@@ -114,28 +103,38 @@ CLN <- ManualAnnotation(CLN)
 
 ```
 
-```{r include=FALSE, eval=FALSE}
-# Export selections
+```{r}
 
-#saveRDS(CLN@meta.data, file = "../R_objects/CLN_metadata_selections")
-CLN@meta.data <- readRDS("../R_objects/CLN_metadata_selections")
+pre_ann <- readRDS("data/CLN_metadata_selections")
+CLN@meta.data[rownames(pre_ann), "labels"] <- pre_ann[, "labels"]
 
 ```
 
+Add a new metadata column with a combined protocol and lung ID label
 
-### Filter out background and serosa
-***
+```{r}
 
-```{r eval=FALSE}
+CLN$cln_id <- CLN[[]] %>%
+  mutate(cln_id = ifelse(paper_id == "1.0", "Sample 1", "Sample 2")) %>%
+  pull(cln_id)
+
+CLN$protocol_sample <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$cln_id))
+ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_sample")
+
+```
+
+Filter out background
+
+```{r}
 
 CLN <- SubsetSTData(CLN, expression = labels %in% c("mucosa", "submucosa", "muscularis"))
 
 ```
 
-### Export annotations
+## Create H&E + spatial maps of unique genes for Figure 3a
 ***
 
-```{r fig.width=14, fig.height=4, eval=FALSE}
+```{r fig.width=12, fig.height=6}
 
 
 infoTable[c(5:6, 2, 4, 1, 3), 1]
@@ -181,36 +180,48 @@ plots_HE <- lapply(c("2", "3", "4", "6"), function(i) {
 
 p1 <- plots_HE[[1]] + 
   ann_plots[[1]]
-pdf(file = "sample1_RRST.pdf", width = 6.3, height = 3.05)
-print(p1)
-dev.off()
+p1
 
 p2 <-  plots_HE[[2]] +
   ann_plots[[2]]
-pdf(file = "sample1_standard.pdf", width = 5.7, height = 2.9)
-print(p2)
-dev.off()
+p2
 
 p3 <-  plots_HE[[3]] +
   ann_plots[[3]]
-pdf(file = "sample2_RRST.pdf", width = 7.8, height = 3.2)
-print(p3)
-dev.off()
+p3
 
 p4 <-  plots_HE[[4]] +
   ann_plots[[4]]
-pdf(file = "sample2_standard.pdf", width = 7, height = 3.4)
-print(p4)
+p4
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/sample1_HE_unique_genes_RRST.pdf", width = 6.3, height = 3.05)
+print(p1)
 dev.off()
 
+pdf(file = "plots/sample1_HE_unique_genes_standard.pdf", width = 5.7, height = 2.9)
+print(p2)
+dev.off()
+
+pdf(file = "plots/sample2_HE_unique_genes_RRST.pdf", width = 7.8, height = 3.2)
+print(p3)
+dev.off()
+
+pdf(file = "plots/sample2_HE_unique_genes_standard.pdf", width = 7, height = 3.4)
+print(p4)
+dev.off()
 
 ```
 
 
-### Plot QC by region
+
+## Violin plots for Figure 3 c and d
 ***
 
-```{r fig.width=14, fig.height=5, eval=FALSE}
+```{r fig.width=14, fig.height=6, eval=FALSE}
 
 th <- theme(panel.background = element_rect(fill = "white", colour = "lightgray"), 
           panel.grid = element_line(colour = "lightgray", linetype = "longdash"), 
@@ -228,8 +239,7 @@ dt <- CLN[[]] %>%
                                   nm = c("mucosa", "submucosa", "muscularis"))[labels], 
                          levels = c("Mucosa", "Submucosa", "Muscularis")), 
          arrayID = factor(arrayID, levels = c("V11M22-349_A1", "V11M22-349_B1", "V11A20-396_A1",
-                                              "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1")),
-         paper_id = setNames(c("Sample 1", "Sample 2"), nm = c("1.0", "2.0"))[paper_id])
+                                              "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1")))
 
 p1 <- ggplot() +
     geom_violin(data = dt, aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") +
@@ -237,11 +247,11 @@ p1 <- ggplot() +
                  mutate(replicate = setNames(c("rep1", "rep2", "rep1", "rep1", "rep2", "rep1"), 
                                        nm = c("V11M22-349_A1", "V11M22-349_B1", "V11A20-396_A1",
                                               "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1"))[arrayID]) %>%
-                 group_by(labels, paper_id, arrayID, replicate) %>% 
+                 group_by(labels, cln_id, arrayID, replicate) %>% 
                  summarize(Mean = median(nFeature_RNA)), 
                aes(arrayID, Mean, shape = replicate), size = 3) +
     scale_shape_manual(values = c("rep1" = 4, "rep2" = 6)) +
-    facet_grid(paper_id~labels, scales = "free", space = "free") +
+    facet_grid(cln_id~labels, scales = "free", space = "free") +
     labs(y = "", x = "", title = "Unique genes") +
     th +
     scale_y_log10()
@@ -252,28 +262,35 @@ p2 <- ggplot() +
                  mutate(replicate = setNames(c("rep1", "rep2", "rep1", "rep1", "rep2", "rep1"), 
                                        nm = c("V11M22-349_A1", "V11M22-349_B1", "V11A20-396_A1",
                                               "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1"))[arrayID]) %>%
-                 group_by(labels, paper_id, arrayID, replicate) %>% 
+                 group_by(labels, cln_id, arrayID, replicate) %>% 
                  summarize(Mean = median(nCount_RNA)), 
                aes(arrayID, Mean, shape = replicate), size = 3) +
     scale_shape_manual(values = c("rep1" = 4, "rep2" = 6)) +
-    facet_grid(paper_id~labels, scales = "free") +
+    facet_grid(cln_id~labels, scales = "free") +
     labs(y = "", x = "", title = "UMI counts") +
     th +
     scale_y_log10()
 
 p <- p1 | p2
+p
 
-pdf(file = "QC_by_region.pdf", width = 14*1.2, height = 6*1.2)
+```
+
+```{r eval=FALSE}
+
+# Export plot
+pdf(file = "plots/violin_QC_by_region.pdf", width = 14*1.2, height = 6*1.2)
 print(p)
 dev.off()
 
 ```
 
-```{r fig.width=12, fig.height=3, eval=FALSE}
+```{r fig.width=9, fig.height=4}
 
 CLN$unique_genes_log10 <- log10(CLN$nFeature_RNA)
 CLN$UMIs_log10 <- log10(CLN$nCount_RNA)
 CLN$UMIs_log10[CLN$UMIs_log10 < quantile(CLN$UMIs_log10, 0.01)] <- quantile(CLN$UMIs_log10, 0.01)
+col_dims <- c(min(CLN$UMIs_log10), max(CLN$UMIs_log10))
 
 ann_plots <- lapply(c("2", "3", "4", "6"), function(i) {
   gg <- cbind(CLN[[]], GetStaffli(CLN)@meta.data)
@@ -296,28 +313,35 @@ ann_plots <- lapply(c("2", "3", "4", "6"), function(i) {
   return(p)
 })
 
-pdf(file = "sample1_RRST_UMIs_log10.pdf", width = 3.15, height = 3)
+ann_plots[[1]] + ann_plots[[2]]
+ann_plots[[3]] + ann_plots[[4]]
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/sample1_RRST_UMIs_log10.pdf", width = 3.15, height = 3)
 print(ann_plots[[1]])
 dev.off()
 
-pdf(file = "sample1_standard_UMIs_log10.pdf", width = 2.75, height = 2.7)
+pdf(file = "plots/sample1_standard_UMIs_log10.pdf", width = 2.75, height = 2.7)
 print(ann_plots[[2]])
 dev.off()
 
-pdf(file = "sample2_RRST_UMIs_log10.pdf", width = 3.9, height = 3)
+pdf(file = "plots/sample2_RRST_UMIs_log10.pdf", width = 3.9, height = 3)
 print(ann_plots[[3]])
 dev.off()
 
-pdf(file = "sample2_standard_UMIs_log10.pdf", width = 3.5, height = 3.4)
+pdf(file = "plots/sample2_standard_UMIs_log10.pdf", width = 3.5, height = 3.4)
 print(ann_plots[[4]])
 dev.off()
 
 ```
 
 
-Filter data
+Find genes that are detected in both RRST (RNA rescue = RRST) and standard data
 
-```{r eval=FALSE}
+```{r}
 
 umis_standard <- rownames(CLN)[rowSums(GetAssayData(CLN, slot = "counts")[, CLN$protocol == "standard"]) > 0]
 umis_RRST <- rownames(CLN)[rowSums(GetAssayData(CLN, slot = "counts")[, CLN$protocol == "RNA rescue"]) > 0]
@@ -326,48 +350,58 @@ genes.keep <- intersect(umis_standard, umis_RRST)
 
 ```
 
-```{r eval=FALSE}
+Subset and normalize data.
+
+```{r}
 
 CLN.subset <- SubsetSTData(CLN, features = genes.keep)
-library(harmony)
 CLN.subset <- CLN.subset %>% 
   NormalizeData() %>% 
-  ScaleData() %>% 
-  FindVariableFeatures() %>%
-  RunPCA() %>%
-  RunHarmony(group.by.vars = c("arrayID", "protocol", "paper_id")) %>%
-  FindNeighbors(reduction = "harmony", dims = 1:20) %>%
-  FindClusters() %>%
-  RunUMAP(reduction = "harmony", dims = 1:20)
+  ScaleData()
 
 ```
 
 
-```{r eval=FALSE}
+## Create plots for Figure 3 e
+***
 
-DimPlot(CLN.subset)
+The marker genes were selected using the [Gut Cell Atlas](https://www.gutcellatlas.org/spacetime/full/)
+
+Link to paper: https://doi.org/10.1038/s41586-021-03852-1
+
+```{r fig.width=12, fig.height=2, out.width="100%"}
+
+ST.FeaturePlot(CLN.subset, features = "labels", ncol = 6, show.sb = FALSE)
+
+```
+Spatial distribution of selected marker genes.
+
+```{r fig.width=12, fig.height=22}
+
+selected.genes <- c("CLDN3", "CLDN4", "CLDN7", "FABP1", "SLC26A2", "SLC26A3", "MS4A12", "CEACAM7", "AQP8", "KRT20", "PIGR")
+ST.FeaturePlot(CLN.subset, features = selected.genes, ncol = 11, grid.ncol = 1, show.sb = F)
 
 ```
 
+### Figure 3 e
+***
 
-```{r fig.width=8, fig.height=4, eval=FALSE}
+```{r fig.width=12, fig.height=5}
 
-selected.genes <- c("CLDN3", "CLDN4", "CLDN7", "FABP1", "SLC26A2", "SLC26A3", "MS4A12", "SLC26A3", "CEACAM7", "AQP8", "KRT20", "PIGR")
 gg <- cbind(CLN.subset[[]], FetchData(CLN.subset, vars = selected.genes)) %>%
   subset(labels == "mucosa") %>%
   reshape2::melt(measure.vars = selected.genes) %>%
-  mutate(paper_id = setNames(c("Sample1", "Sample2"), nm = c("1.0", "2.0"))[paper_id],
-         protocol = setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[protocol])
+  mutate(protocol = setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[protocol])
 
 ggs <- gg %>% 
-  group_by(protocol, paper_id, variable) %>%
+  group_by(protocol, cln_id, variable) %>%
   summarize(det = paste0(round(sum(value > 0)/n(), digits = 2)*100, "%"))
   
 
 p <- ggplot() +
   geom_violin(data = gg, aes(protocol, value, fill = protocol), scale = "width") +
   geom_label(data = ggs, aes(protocol, -1, fill = protocol, label = det)) +
-  facet_grid(paper_id ~ variable) +
+  facet_grid(cln_id ~ variable) +
   labs(y = "Normalized expression") +
   theme(axis.text.x = element_blank(), 
         axis.title.x = element_blank(),
@@ -380,9 +414,14 @@ p <- ggplot() +
         panel.grid = element_line(colour = "lightgray", linetype = "longdash"),
         legend.position = "bottom") +
   scale_fill_brewer(palette = "Pastel1")
-#p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+p
 
-pdf(file = "selected_markers_violin.pdf", width = 18, height = 5.5)
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/selected_markers_violin.pdf", width = 18, height = 5.5)
 print(p)
 dev.off()
 

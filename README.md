@@ -34,6 +34,12 @@ Note that you need to be in the correct folder (i.e. the RRST folder cloned from
 You can provide your own password for the RStudio server by replacing `YOURPASSWORD`, for example 
 `-e PASSWORD=12345678`. 
 
+You can check that the container is running by typing:
+
+````
+docker container ls -a
+````
+
 Now you can go open a browser (e.g. Chrome) and enter: `localhost:1337` in the address bar. This should 
 take you to a login page for RStudio server where you can enter the user name and your pwaword to login.
 
@@ -46,3 +52,7 @@ You can start and stop the container by running:
 docker start RRST
 docker stop RRST
 ````
+
+## Setting up the R environment
+
+Open the `Ìnstallation.Rmd` file and follow the instructions.

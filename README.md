@@ -27,10 +27,12 @@ Now we can generate a container from the ludlar/rrst image. This image should ha
 that we need to run the analyses installed.
 
 ````
-sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=6g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE ludlar/rrst:latest
+sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=8g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE ludlar/rrst:latest
 ````
 
-Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub).
+Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub). The 
+`--memory` flag you can adjust as you see fit, but you probably want to allocate as much memory as 
+you can as some of the computations are quite demanding.
 You can provide your own password for the RStudio server by replacing `YOURPASSWORD`, for example 
 `-e PASSWORD=12345678`. 
 

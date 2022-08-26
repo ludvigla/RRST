@@ -60,3 +60,10 @@ docker stop RRST
 When you have opened the rstudio server, you should see the 6 figure folders in the 
 file viewer (bottom right). Inside each of these folders, there is an `.Rmd` notebook
 that you can run to reproduce the analyses.
+
+## Trouble shooting
+
+If you run out of memory in the container, check if you can allocate more with 
+`docker run --memory=<SOME VALUE>`. 
+
+You can get more info [here](https://docs.docker.com/config/containers/resource_constraints/) on the docker website.

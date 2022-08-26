@@ -23,11 +23,11 @@ git clone https://github.com/ludvigla/RRST
 cd RRST
 ````
 
-Now we can generate a container from the rocker/rstudio image. We'll use 
-the v4.1.3 image to get the correct version of R:
+Now we can generate a container from the ludlar/rrst image. This image should have everything 
+that we need to run the analyses installed.
 
 ````
-sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=6g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE rocker/rstudio:4.1.3
+sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=6g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE ludlar/rrst:latest
 ````
 
 Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub).
@@ -53,6 +53,8 @@ docker start RRST
 docker stop RRST
 ````
 
-## Setting up the R environment
+## Running analyses
 
-Open the `Ìnstallation.Rmd` file and follow the instructions.
+When you have opened the rstudio server, you should see the 6 figure folders in the 
+file viewer (bottom right). Inside each of these folders, there is an `.Rmd` notebook
+that you can run to reproduce the analyses.

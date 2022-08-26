@@ -4,6 +4,8 @@
 
 1. Clean up unnecessary files
 2. Add html to each Figure rmd
+3. The data is currently unavailable
+4. Test docker container to make sure that the R environment is correct
 
 ## Docker instructions
 

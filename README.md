@@ -27,23 +27,22 @@ Now we can generate a container from the ludlar/rrst image. This image should ha
 that we need to run the analyses installed.
 
 ````
-sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=8g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE ludlar/rrst:latest
+sudo docker run -d -p 1337:8787 --name RRST -e PASSWORD=YOURPASWORD --memory=16g --mount type=bind,source="$(pwd)",target=/home/rstudio -e ROOT=TRUE ludlar/rrst:latest
 ````
 
-Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub). The 
-`--memory` flag you can adjust as you see fit, but you probably want to allocate as much memory as 
-you can as some of the computations are quite demanding.
+Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub). You can change 
+`--memory` flag as you see fit, but you the code has only been tested with 16GiB of RAM.
 You can provide your own password for the RStudio server by replacing `YOURPASSWORD`, for example 
 `-e PASSWORD=12345678`. 
 
-You can check that the container is running by typing:
+When the `docker run` command is finished, you  can check that the container is running by typing:
 
 ````
 docker container ls -a
 ````
 
 Now you can go open a browser (e.g. Chrome) and enter: `localhost:1337` in the address bar. This should 
-take you to a login page for RStudio server where you can enter the user name and your pwaword to login.
+take you to a login page for an RStudio server where you can enter the user name and your pwaword to login.
 
 * user name: rstudio
 * password: `YOURPASSWORD` 

@@ -67,3 +67,8 @@ If you run out of memory in the container, check if you can allocate more with
 `docker run --memory=<SOME VALUE>`. 
 
 You can get more info [here](https://docs.docker.com/config/containers/resource_constraints/) on the docker website.
+
+You might also want to increase the memory limit in docker. If you run `docker info` you can check how much memory is
+available, e.g. "Total memory: 8GiB". If you have more resources to allocate, you can for example go to the Docker Desktop App 
+and then Preferences -> Resources and increase the memory. Otherwise, if you try to allocate more resources with the `--memory` flag 
+when running `docker run` than the 8GiB available, you will end up with 8GiB anyways.

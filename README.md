@@ -70,5 +70,5 @@ You can get more info [here](https://docs.docker.com/config/containers/resource_
 You might also want to increase the memory limit in docker. If you run `docker info` you can check how much memory is
 available to docker, e.g. "Total memory: 8GiB". If you have more resources available on your system, you can increase 
 this number. If you are using the Docker desktop app, open it and go to Preferences -> Resources and increase the memory. 
-Otherwise, if you try to allocate more resources with the `--memory` flag than the 8GiB available, you will be limited 
-to use the 8GiB available to docker.
+The docker memory limit puts a limitation on the memory available to the container. 
+For example, if you try to set `--memory=16g` when the the docker memory limit is 8GiB, you will end up with 8GiB. 

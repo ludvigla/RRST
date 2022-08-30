@@ -1,13 +1,11 @@
 st_seminar/
 R_objects/
-Figure_2/R_objects/
 Figure_1/*[ai|png|jpg]
-Figure_2/*[ai|jpg|png|pdf]
+Figure_2/*[ai]
 Figure_3/*[ai|png|pdf]
 Figure_4/*[ai|png|pdf]
 Figure_5/*[ai|png|pdf]
 Figure_6/*[ai|png|pdf|jpeg]
-data/R_objects/
-data/genes/
-data/sheets/
-data/spaceranger_output/
+.Rhistory
+.local/
+.config/

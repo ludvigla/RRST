@@ -7,3 +7,7 @@ Figure_3/*[ai|png|pdf]
 Figure_4/*[ai|png|pdf]
 Figure_5/*[ai|png|pdf]
 Figure_6/*[ai|png|pdf|jpeg]
+data/R_objects/
+data/genes/
+data/sheets/
+data/spaceranger_output/

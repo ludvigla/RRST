@@ -17,6 +17,37 @@ library(dplyr)
 
 ```
 
+Download files from Mendeley.
+
+```{r eval=FALSE}
+
+# Create data directories
+suppressWarnings({
+  dir.create("../data/")
+  dir.create("../data/genes/")
+  dir.create("../data/sheets/")
+  dir.create("../data/spaceranger_output/")
+})
+
+source("../scripts/mendeley.R")
+
+# Download gene annotation files
+for (i in seq_along(genes.files)) {
+  download.file(url = genes.files[i], destfile = paste0("../data/genes/", names(genes.files)[i]))
+}
+
+# Download gene annotation files
+for (i in seq_along(sheets.files)) {
+  download.file(url = sheets.files[i], destfile = paste0("../data/sheets/", names(sheets.files)[i]))
+}
+
+# Download spaceranger output files
+download.file(url = spaceranger.files[4], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[4]))
+untar(tarfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[4]), exdir = "../data/spaceranger_output/")
+file.remove(paste0("../data/spaceranger_output/", names(spaceranger.files)[4]))
+
+```
+
 Create raw Seurat object
 
 ```{r}

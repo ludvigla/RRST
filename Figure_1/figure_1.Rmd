@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, root.dir = "/home/rstudio")
 ```
 
 Load required libraries
@@ -24,31 +24,65 @@ library(ggbreak)
 ```
 
 
+Download files from Mendeley.
+
+```{r eval=FALSE}
+
+# Create data directories
+suppressWarnings({
+  dir.create("../data/")
+  dir.create("../data/genes/")
+  dir.create("../data/sheets/")
+  dir.create("../data/spaceranger_output/")
+})
+
+source("../scripts/mendeley.R")
+
+# Download gene annotation files
+for (i in seq_along(genes.files)) {
+  download.file(url = genes.files[i], destfile = paste0("../data/genes/", names(genes.files)[i]))
+}
+
+# Download gene annotation files
+for (i in seq_along(sheets.files)) {
+  download.file(url = sheets.files[i], destfile = paste0("../data/sheets/", names(sheets.files)[i]))
+}
+
+# Download spaceranger output files
+for (i in 5:6) {
+  download.file(url = spaceranger.files[i], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[i]))
+  untar(tarfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[i]), exdir = "../data/spaceranger_output/")
+  file.remove(paste0("../data/spaceranger_output/", names(spaceranger.files)[i]))
+}
+
+```
+
+
 Assemble spaceranger output files
 
-TODO: make datasets available for download
 
 ```{r}
 
 # Mouse brain
-samples1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/filtered_feature_bc_matrix.h5")
-imgs1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/tissue_hires_image.png")
-spotfiles1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/tissue_positions_list.csv")
-json1 <- Sys.glob(paths = "../../spaceranger_output/degraded_MB/*/spatial/scalefactors_json.json")
+samples1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/filtered_feature_bc_matrix.h5")
+imgs1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/spatial/tissue_hires_image.png")
+spotfiles1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/spatial/tissue_positions_list.csv")
+json1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/spatial/scalefactors_json.json")
 
 # Prostate cancer
-samples2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/filtered_feature_bc_matrix.h5")
-imgs2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/tissue_hires_image.png")
-spotfiles2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/tissue_positions_list.csv")
-json2 <- Sys.glob(paths = "../../spaceranger_output/prostatecancer/*/spatial/scalefactors_json.json")
+samples2 <- Sys.glob(paths = "../data/spaceranger_output/prostatecancer/*/filtered_feature_bc_matrix.h5")
+imgs2 <- Sys.glob(paths = "../data/spaceranger_output/prostatecancer/*/spatial/tissue_hires_image.png")
+spotfiles2 <- Sys.glob(paths = "../data/spaceranger_output/prostatecancer/*/spatial/tissue_positions_list.csv")
+json2 <- Sys.glob(paths = "../data/spaceranger_output/prostatecancer/*/spatial/scalefactors_json.json")
 
 infoTable <- data.frame(samples = c(samples1, samples2), imgs = c(imgs1, imgs2), spotfiles = c(spotfiles1, spotfiles2), json = c(json1, json2))
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
                                                        "project", "experimenter", "processer", "comments",
-                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
+                                                      "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",
@@ -232,7 +266,7 @@ dev.off()
 
 ```{r fig.width=10, fig.height=3}
 
-gene_annotations <- read.table(file = "sheets/mgenes.tsv", header = TRUE)
+gene_annotations <- read.table(file = "../data/genes/mgenes.tsv", header = TRUE)
 rownames(gene_annotations) <- gene_annotations$gene_name
 
 # rename gene type for mitochondrial and ribosomal protein coding genes
@@ -432,7 +466,7 @@ Subset genes to include those available in the Visium FFPE probe set.
 
 ```{r}
 
-human_probes <- read.csv("../../sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
+human_probes <- read.csv("../data/sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
 human_probes$gene_name <- do.call(rbind, strsplit(human_probes$probe_id, "\\|"))[, 2]
 
 ```
@@ -483,7 +517,7 @@ dev.off()
 
 ```{r fig.width=10, fig.height=3}
 
-gene_annotations <- read.table(file = "../../genes/hgenes.tsv", header = TRUE)
+gene_annotations <- read.table(file = "../data/genes/hgenes.tsv", header = TRUE)
 rownames(gene_annotations) <- gene_annotations$gene_name
 
 # rename gene type for mitochondrial and ribosomal protein coding genes

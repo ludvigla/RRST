@@ -11,33 +11,66 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load libraries
 
-```{r eval=FALSE}
+```{r warning=FALSE, message=FALSE}
 
 library(STutility)
 library(ggplot2)
 library(ggpubr)
 library(dplyr)
 library(magrittr)
+library(UpSetR)
+
+```
+
+Download files from Mendeley.
+
+```{r eval=FALSE}
+
+# Create data directories
+suppressWarnings({
+  dir.create("../data/")
+  dir.create("../data/genes/")
+  dir.create("../data/sheets/")
+  dir.create("../data/spaceranger_output/")
+})
+
+source("../scripts/mendeley.R")
+
+# Download gene annotation files
+for (i in seq_along(genes.files)) {
+  download.file(url = genes.files[i], destfile = paste0("../data/genes/", names(genes.files)[i]))
+}
+
+# Download gene annotation files
+for (i in seq_along(sheets.files)) {
+  download.file(url = sheets.files[i], destfile = paste0("../data/sheets/", names(sheets.files)[i]))
+}
+
+# Download spaceranger output files
+download.file(url = spaceranger.files[7], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[7]))
+untar(tarfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[7]), exdir = "../data/spaceranger_output/")
+file.remove(paste0("../data/spaceranger_output/", names(spaceranger.files)[7]))
 
 ```
 
 Assemble spaceranger output files and merge curated meta data
 
-```{r eval=FALSE}
+```{r}
 
 # Mouse brain
-samples <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/filtered_feature_bc_matrix.h5")
-imgs <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/tissue_hires_image.png")
-spotfiles <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/tissue_positions_list.csv")
-json <- Sys.glob(paths = "../../spaceranger_output/smallintestine/*/spatial/scalefactors_json.json")
+samples <- Sys.glob(paths = "../data/spaceranger_output/smallintestine/*/filtered_feature_bc_matrix.h5")
+imgs <- Sys.glob(paths = "../data/spaceranger_output/smallintestine/*/spatial/tissue_hires_image.png")
+spotfiles <- Sys.glob(paths = "../data/spaceranger_output/smallintestine/*/spatial/tissue_positions_list.csv")
+json <- Sys.glob(paths = "../data/spaceranger_output/smallintestine/*/spatial/scalefactors_json.json")
 
 infoTable <- data.frame(samples, imgs, spotfiles, json)
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
                                                        "project", "experimenter", "processer", "comments",
-                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", 
+                                                      "source", "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",
@@ -53,46 +86,33 @@ infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
 
 Load data into a Seurat object
 
-
-```{r eval=FALSE}
+```{r}
 
 SI <- InputFromTable(infoTable %>% arrange(seq_date))
 
 ```
 
-```{r eval=FALSE, fig.width=10, fig.height=12}
+Add a new column with the combined "protocol" and "ID"
+
+```{r fig.width=10, fig.height=12}
 
 SI$protocol_array <- paste0(SI$protocol, " : ", SI$arrayID)
 ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_array", show.sb = FALSE, pt.size = 1.5)
 
 ```
 
-Load images
+Load H&E images
 
-```{r eval=FALSE}
+```{r}
 
 SI <- LoadImages(SI, time.resolve = FALSE, xdim = 1e3)
 
 ```
 
-Add empty masks for downstream processing of HE images
 
-```{r eval=FALSE}
+Apply rigid transformations to obtain a rough alignment of the tissue sections.
 
-# Prepare data for rigid transformation
-st.object <- GetStaffli(SI)
-msks <- lapply(st.object@rasterlists$raw, function(im) {
-  as.raster(matrix(data = 1, ncol = ncol(im), nrow = nrow(im)))
-})
-st.object@rasterlists$masked <- st.object@rasterlists$raw
-st.object@rasterlists$masked.masks <- msks
-SI@tools$Staffli <- st.object
-
-```
-
-Apply transformations
-
-```{r eval=FALSE}
+```{r}
 
 # Warp transform
 SI <- WarpImages(SI, verbose = TRUE, transforms = list("3" = list(angle = -90), "4" = list(angle = -90), 
@@ -106,10 +126,12 @@ SI <- WarpImages(SI, verbose = TRUE, transforms = list("3" = list(angle = -90), 
 
 Add a new metadata column with a combined protocol and lung ID label
 
-```{r eval=FALSE, fig.width=10, fig.height=10}
+```{r fig.width=10, fig.height=10}
 
-SI$protocol_lng <- gsub(pattern = " ", replacement = "_", paste0(SI$protocol, "_ID: ", SI$paper_id))
-ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_lng")
+SI$paper_id <- "SI"
+
+SI$protocol_id <- gsub(pattern = " ", replacement = "_", paste0(SI$protocol, "_ID: ", SI$paper_id))
+ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_id")
 
 ```
 
@@ -121,11 +143,9 @@ SI <- ManualAnnotation(SI, type = "raw")
 
 ```
 
-```{r include=FALSE, eval=FALSE}
-# Export selections
+```{r}
 
-#saveRDS(SI@meta.data, file = "../R_objects/SI_metadata_selections")
-meta.data <- readRDS("../R_objects/SI_metadata_selections")
+meta.data <- readRDS("../data/R_objects/SI_metadata_selections")
 meta.data <- meta.data[colnames(SI), ]
 SI@meta.data$labels <- meta.data$labels
 SI@meta.data$labels[is.na(SI@meta.data$labels)] <- "background"
@@ -139,7 +159,9 @@ SI@meta.data[submucosa_13, "labels"] <- "submucosa"
 ### Filter out background
 ***
 
-```{r eval=FALSE}
+Keep only labeled spots.
+
+```{r}
 
 SI <- SubsetSTData(SI, expression = labels %in% c("mucosa", "submucosa", "muscularis", "TLS", "serosa"))
 
@@ -149,9 +171,11 @@ SI <- SubsetSTData(SI, expression = labels %in% c("mucosa", "submucosa", "muscul
 ### Biotype content
 ***
 
-```{r eval=FALSE}
+Load hgenes.tsv containing biotype annotations and add the "mt_protein_coding" and "rb_protein_coding" categories.
 
-ensids <- read.table("../../genes/hgenes.tsv", header = T)
+```{r}
+
+ensids <- read.table("../data/genes/hgenes.tsv", header = T)
 rownames(ensids) <- ensids$gene_name
 
 ensids$gene_type[grep(pattern = "^MT-", x = ensids$gene_name)] <- "mt_protein_coding"
@@ -159,9 +183,14 @@ ensids$gene_type[grep(pattern = "^RPL|^RPS", x = ensids$gene_name)] <- "rb_prote
 
 ```
 
+## Figure 4 c - Biotype content as pie charts
+***
 
-```{r eval=FALSE}
+First, we add a new column to our meta data with approximate storage times (time after sample collection). Then we calculate gene attributes: gene name, gene counts and biotype (gene_type). From this gene attribute `data.frame` we can then calculate percentages of each biotype for each storage time. Note that all biotypes that are not "IG_C_gene", "IG_J_gene", "IG_V_gene", "TR_C_gene", "TR_J_gene", "TR_V_gene", "lncRNA", "protein_coding", "rb_protein_coding" or "mt_protein_coding" are pur in a category called "other". 
 
+```{r}
+
+# Add approximate storage time
 SI$time <- SI[[]] %>%
   mutate(time = factor(case_when(seq_date == "200323" ~ "~ 1 month",
                           seq_date == "200923" ~ "~ 6 months",
@@ -169,11 +198,13 @@ SI$time <- SI[[]] %>%
                        levels = c("~ 1 month", "~ 6 months", "~ 2 years"))) %>% # ifelse(SI$seq_date %in% c("220404", "220506"), "220404-220506", SI$seq_date)
   pull(time)
 
+# calculate gene attributes
 gene_attr <- do.call(rbind, lapply(levels(SI$time), function(i) {
   x <- rowSums(GetAssayData(SI, slot = "counts", assay = "RNA")[, SI$time == i])
   data.frame(gene = names(x), count = x, gene_type = ensids[names(x), "gene_type"], time = i)
 }))
 
+# Calculate percentages for each storage time
 gene_attr <- gene_attr %>% group_by(time, gene_type) %>% 
   summarize(N = sum(count)) %>% 
   group_by(time) %>% 
@@ -187,7 +218,10 @@ gene_attr <- gene_attr %>% group_by(time, gene_type) %>%
                           "TR_C_gene", "TR_J_gene", "TR_V_gene", "other")))
 gene_attr$time <- factor(gene_attr$time, levels = c("~ 1 month", "~ 6 months", "~ 2 years"))
 
+# Create a color palette
 cols <- c("#332288", "#6699CC", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#661100", "#CC6677", "#882255", "#AA4499")
+
+# Create pie charts
 p <- ggplot(gene_attr, aes(x = "", y = p, fill = gene_type)) +
   geom_bar(width = 1, stat = "identity") +
   coord_polar("y", start = 0) +
@@ -200,24 +234,32 @@ p <- ggplot(gene_attr, aes(x = "", y = p, fill = gene_type)) +
   labs(x = "", y = "", fill = "") +
   scale_y_continuous(labels = scales::percent) +
   scale_fill_manual(values = cols)
+p
 
-pdf(file = "biotype_content.pdf", width = 6, height = 6)
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/biotype_content.pdf", width = 6, height = 6)
 print(p)
 dev.off()
 
 ```
 
+We can plot the labels for the five regions as a spatial map. 
+
 ```{r fig.width=12, fig.height=10,  eval=FALSE}
 
-# ST.FeaturePlot(SI, features = "labels", ncol = 4, label.by = "time")
+ST.FeaturePlot(SI, features = "labels", ncol = 4, label.by = "time", show.sb = FALSE)
 
 ```
 
-### Supplementary figure
+## Supplementary figure - small intestine labels (five manually annotated regions)
 ***
 
-```{r  eval=FALSE}
+```{r fig.width=14, fig.height=15}
 
+# Create H&E image plots
 plots_HE <- lapply(paste0(1:14), function(i) {
   im <- GetStaffli(SI)@rasterlists$processed[[i]]
   g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
@@ -227,6 +269,7 @@ plots_HE <- lapply(paste0(1:14), function(i) {
     theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0))
 })
 
+# Plot labels
 labels_plot <- lapply(1:14, function(i) {
   p <- ST.FeaturePlot(SI, features = "labels", indices = i, show.sb = FALSE, pt.size = 0.7,
                  cols = c("mucosa" = "#AA4499", "submucosa" = "#DDCC77", "muscularis" = "#CC6677", "TLS" = "#77AADD", "serosa" = "#771155")) & 
@@ -234,18 +277,26 @@ labels_plot <- lapply(1:14, function(i) {
   p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
 })
 
+# Combine H&E with label plots for each tissue section
 plots <- lapply(1:14, function(i) {
   p <- plots_HE[[i]] | labels_plot[[i]]
   return(p)
 })
 
+# Patch together tissue sections
 p1 <- cowplot::plot_grid(plotlist = plots[c(1:4, 13:14)], ncol = 1)
 p2 <- cowplot::plot_grid(plotlist = c(plots[5:8], list(NULL, NULL)), ncol = 1)
 p3 <- cowplot::plot_grid(plotlist = c(plots[9:12], list(NULL, NULL)), ncol = 1)
 
+# Create final patchwork
 p <- p1 + p2 + p3 + patchwork::plot_layout(ncol = 3)
+p
 
-pdf(file = "suppl_figure_HE_and_labels.pdf", width = 10, height = 10)
+```
+
+```{r eval=FALSE}
+
+pdf(file = "../Suppl_figures/Suppl_Figure_smallintestine_labels/suppl_figure_HE_and_labels.pdf", width = 10, height = 10)
 print(p)
 dev.off()
 
@@ -253,23 +304,33 @@ dev.off()
 
 
 
-### Plot H&E
+## Figure 4a - H&E image, top panel
 ***
+
+Here we export the H&E image for the second tissue section. We also crop the image to remove the Visium fiducials.
+
+```{r fig.width=5, fig.height=5}
+
+par(mar = c(0,0,0,0))
+plot(SI@tools$Staffli@rasterlists$raw$`2`[116:883, 95:860])
+
+```
 
 ```{r eval=FALSE}
 
-png(filename = "HE.png", width = 860 - 95, height = 883 - 116)
-#95, 116, 860, 883
+png(filename = "plots/HE.png", width = 860 - 95, height = 883 - 116)
 par(mar = c(0,0,0,0))
 plot(SI@tools$Staffli@rasterlists$raw$`2`[116:883, 95:860])
 dev.off()
 
 ```
 
-### Plot annotation
+## Figure 4a - labels as a spatial map  (bottom panel)
 ***
 
-```{r eval=FALSE}
+And the manual annotations for the bottom half of Fig. 4a.
+
+```{r fig.width=5, fig.height=5}
   
 gg <- cbind(SI[[]], GetStaffli(SI)@meta.data)
 gg <- subset(gg, sample == "2")
@@ -288,19 +349,23 @@ p <- ggplot(gg, aes(warped_x, dims$height - warped_y, color = labels)) +
   theme(legend.position = "none")
 
 p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+p
 
+```
 
-png(filename = "annotations.png", width = (860 - 95)*2, height = (883 - 116)*2, res = 300)
+```{r eval=FALSE}
+
+png(filename = "plots/annotations.png", width = (860 - 95)*2, height = (883 - 116)*2, res = 300)
 print(p)
 dev.off()
 
 ```
 
 
-### Add new date column
+## Figure 4b - distribution of unique genes across regions and time points as violin plots
 ***
 
-```{r fig.width=12, fig.height=8, eval=FALSE}
+```{r fig.width=12, fig.height=8}
   
 p <- ggplot() + 
   geom_violin(data = SI[[]], 
@@ -322,105 +387,46 @@ p <- ggplot() +
         legend.text = element_text(size = 14, colour = "black"),
         legend.title = element_text(size = 16, colour = "black"), 
         legend.position = "bottom")
+p
 
-pdf(file = "unique_genes_overview.pdf", width = 14, height = 10)
+```
+
+```{r eval=FALSE}
+pdf(file = "plots/unique_genes_overview.pdf", width = 14, height = 10)
 print(p)
 dev.off()
 
 ```
 
 
-### Export annotations (Suppl?)
+## Normalize data
 ***
 
-```{r fig.width=14, fig.height=4, eval=FALSE}
-
-
-infoTable[, 1]
-
-limits_list <- list("1" = c(x_start = 260, y_start = 500, x_end = 1600, y_end = 1800),
-                    "5" = c(x_start = 170, y_start = 340, x_end = 1400, y_end = 1500),
-                    "13" = c(x_start = 130, y_start = 240, x_end = 1780, y_end = 1560))
-
-ann_plots <- lapply(c("1", "5", "13"), function(i) {
-  
-  gg <- cbind(SI[[]], GetStaffli(SI)@meta.data)
-  gg <- subset(gg, sample == i)
-  dims <- GetStaffli(SI)@dims[[i]]
-  
-  p <- ggplot(gg, aes(warped_x, dims$height - warped_y, color = labels)) +
-    geom_point(size = 1) +
-    theme_void() +
-    scale_color_manual(values = c("mucosa" = "#AA4499", "submucosa" = "#DDCC77", "muscularis" = "#CC6677", 
-                                  "TLS" = "#77AADD", "serosa" = "#771155")) +
-    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], 
-                                  limits_list[[i]]["x_end"])) +
-    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], 
-                                  dims$height - limits_list[[i]]["y_start"])) +
-    theme(legend.position = "none")
-
-  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
-  return(p)
-})
-
-# HE images
-plots_HE <- lapply(c("2", "3", "4", "6"), function(i) {
-  im <- GetStaffli(CLN)@rasterlists$processed[[paste0(i)]]
-  dims <- GetStaffli(CLN)@dims[[i]]
-   
-  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*0.5, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*0.5]
-  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
-  p <- ggplot() +
-    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
-    theme_void() +
-    theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0))
-  return(p)
-})
-
-
-```
-
-
-# Analysis
-***
-
-```{r eval=FALSE}
+```{r}
 
 SISplit <- lapply(levels(SI$time), function(i) {
   cat(sprintf("Started processing data set %s", i), "\n")
   SIs <- SubsetSTData(SI, expression = nFeature_RNA > 100)
   SIs <- SubsetSTData(SIs, expression = time %in% i)
   SIs <- SIs %>% 
-    NormalizeData() %>% 
-    ScaleData() %>% 
-    FindVariableFeatures() %>%
-    RunPCA() %>%
-    RunHarmony(group.by.vars = "arrayID", reduction = "pca", dims.use = 1:20) %>%
-    FindNeighbors(reduction = "harmony", dims = 1:20) %>%
-    FindClusters() %>%
-    RunUMAP(reduction = "harmony", dims = 1:20)
+    NormalizeData()
   SIs <- SetIdent(SIs, value = "labels")
   return(SIs)
 })
 
 ```
 
-```{r fig.width=6, fig.height=5, eval=FALSE}
 
-DimPlot(SISplit[[3]], group.by = "seurat_clusters") +
-DimPlot(SISplit[[3]], group.by = "arrayID") +
-  DimPlot(SISplit[[3]]) +
-  patchwork::plot_layout(nrow = 2)
+## DE test
+***
 
-```
+Here we run the test for each storage time separately, while keeping only 1000 spots per group to speed up computations. We keep genes with a positive avg_log2FC value and with adjusted p-values lower than 0.01. Note that we test our manually annotated "mucosa" spots against the background spots.
 
-
-DE test
-
-```{r eval=FALSE}
+```{r}
 
 de.markers.list <- lapply(SISplit, function(se) {
-  de.markers <- FindMarkers(se, only.pos = TRUE, max.cells.per.ident = 1000, ident.1 = "mucosa") %>% filter(p_val_adj < 0.01)
+  de.markers <- FindMarkers(se, only.pos = TRUE, max.cells.per.ident = 1000, ident.1 = "mucosa") %>% 
+    filter(p_val_adj < 0.01)
   de.markers$gene <- rownames(de.markers)
   de.markers$time <- unique(se$time)
   return(de.markers)
@@ -428,13 +434,16 @@ de.markers.list <- lapply(SISplit, function(se) {
 
 ```
 
+Now we can create the UpSet plot showing the numbers of detected DE genes for each storage time. 
 
+First, we combine all de markers from our `de.markers.list` list into one `data.frame`. Then we group the `data.frame` by gene and check whether the gene is present at one or more storage time points. Thereafter we calculate the number of genes detected in each category, where the categories are: "~ 1 month", "~ 6 months", "~ 2 years" or any combination of these time points. The `expressionInput` is a named integer vector where each element is named by the category described above.
 
-```{r eval=FALSE}
+```{r}
 
 de.markers <- do.call(rbind, de.markers.list)
 
-expressionInput <- de.markers %>% group_by(gene) %>%
+expressionInput <- de.markers %>% 
+  group_by(gene) %>%
   summarize(group = paste0(time, collapse = "&")) %>%
   group_by(group) %>%
   summarize(N = n()) %>%
@@ -442,22 +451,35 @@ expressionInput <- de.markers %>% group_by(gene) %>%
 expressionInput <-  setNames(expressionInput$N, nm =  expressionInput$group)
 
 p <- upset(fromExpression(expressionInput), order.by = "freq")
-
-pdf(file = "upset_DE.pdf", width = 6, height = 3)
-print(p)
-dev.off()
+p
 
 ```
 
 ```{r eval=FALSE}
 
+pdf(file = "plots/upset_DE.pdf", width = 6, height = 3)
+print(p)
+dev.off()
+
+```
+
+## Figure 4e - spatial maps of selected enterocyte markers
+***
+
+The enterocyte markers were selected from the Human Gut Cell Atlas.
+
+```{r fig.width=12, fig.height=8}
+
+# Normalize the SI Seurat object
 SI <- NormalizeData(SI)
 
+# prepare data for plots
 enterocyte.markers <- c("ANPEP", "RBP2", "DGAT1", "FABP2", "APOB")
 gg <- cbind(SI[[]], GetStaffli(SI)@meta.data, FetchData(object = SI, vars = enterocyte.markers)) %>%
-  reshape::melt(measure.vars = enterocyte.markers) %>%
+  tidyr::gather(variable, value, enterocyte.markers) %>%
   select(arrayID, time, warped_x, warped_y, sample, variable, value)
 
+# Create spatial maps
 plots <- lapply(enterocyte.markers, function(i) {
   subset(gg, variable == i) %>%
   subset(sample %in% c("2", "5", "13")) %>%
@@ -475,8 +497,13 @@ plots <- lapply(enterocyte.markers, function(i) {
 })
 
 p <- cowplot::plot_grid(plotlist = plots, nrow = 1)
+p
 
-pdf(file = "markes_spatial_enterocytes.pdf", width = 12, height = 8)
+```
+
+```{r}
+
+pdf(file = "plots/markers_spatial_enterocytes.pdf", width = 12, height = 8)
 print(p)
 dev.off()
 
@@ -503,57 +530,6 @@ de.markers %>% mutate(Freq = as.numeric(table(gene)[gene])) %>%
   group_by(gene) %>%
   summarize(Mean = mean(avg_log2FC)) %>%
   arrange(-Mean)
-
-```
-
-Scale data
-
-```{r fig.width=6, fig.height=2, eval=FALSE}
-
-SI <- NormalizeData(SI)
-SI <- ScaleData(SI, features = de.markers$gene[1:10])
-DotPlot(SI, features = de.markers$gene[1:10])
-
-gg <- cbind(SI[[]], FetchData(SI, vars = de.markers$gene[1:10], slot = "data")) %>% 
-  reshape2::melt(measure.vars = de.markers$gene[1:10]) %>%
-  group_by(variable, labels) %>%
-  summarize(Mean = mean(value), pct = sum(value > 0)/n())
-
-ggplot(gg, aes(variable, labels, color = Mean, size = pct)) +
-  geom_point() +
-  #facet_grid(~time) +
-  scale_color_gradientn(colours = viridis::magma(n = 11, direction = -1))
-
-```
-
-DE test by region
-
-```{r fig.width=8, fig.height=3, eval=FALSE}
-
-region.markers <- FindAllMarkers(SI, only.pos = TRUE)
-selected.markers <- region.markers %>% group_by(cluster) %>% slice_head(n = 10) %>% pull(gene)
-
-SI <- ScaleData(SI, features = selected.markers)
-DotPlot(SI, features = selected.markers, split.by = "time", cols = c("red", "orange", "blue"), dot.scale = 7)
-
-```
-
-
-
-```{r eval=FALSE}
-
-SI$mucosa_bg <- ifelse(SI$labels == "mucosa", "mucosa", "bg")
-
-ST.FeaturePlot(SI, features = "mucosa_bg", indices = c(2, 9, 13), cols = c("mucosa" = "red", "bg" = "lightgray")) &
-  theme(strip.text = element_blank())
-
-```
-
-
-
-```{r eval=FALSE}
-
-DotPlot(SI, features = de.markers$gene[1:10])
 
 ```
 

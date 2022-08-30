@@ -17,11 +17,11 @@ bone.annotation.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6k
                            "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/acbf1c46-f123-4003-9a2a-8aed6492477b?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
                            nm = c("mouse growth plateA1 p4.csv", "mouse growth plateB1 p4.csv", "mouse growth plateC1 p11.csv", "mouse growth plateD1 p11.csv"))
 
-spaceranger.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/8524fc43-c484-4593-889f-4ca72195139c?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+spaceranger.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/efdb0108-8af0-4f33-9b56-d151e20678e2?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/0992dff5-8f56-472a-bc66-10b5acffe700?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/1e298325-38ea-4ae2-8b52-184847a442ab?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/6e786948-df64-460a-a0a6-452c4d66089b?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/1867326b-5fe2-4303-84d8-c6001615c33f?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/4cfc24e9-a7e4-4f0c-94ce-608d2df6dfee?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/6c8cabcc-ef67-4cb4-afcc-77babad09807?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
-                              nm = paste0(c("childbraintumor", "colon", "lung", "mousebone", "mousebrain", "prostatecancer", "smallintestine"), ".tar.gz"))
+                              nm = paste0(c("pediatricbraintumor", "colon", "lung", "mousebone", "mousebrain", "prostatecancer", "smallintestine"), ".tar.gz"))

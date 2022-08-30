@@ -56,10 +56,10 @@ Assemble spaceranger output files and merge curated meta data
 ```{r eval=FALSE}
 
 # Mouse brain
-samples <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/filtered_feature_bc_matrix.h5")
-imgs <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/tissue_hires_image.png")
-spotfiles <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/tissue_positions_list.csv")
-json <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/spatial/scalefactors_json.json")
+samples <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/filtered_feature_bc_matrix.h5")
+imgs <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/spatial/tissue_hires_image.png")
+spotfiles <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/spatial/tissue_positions_list.csv")
+json <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/spatial/scalefactors_json.json")
 
 infoTable <- data.frame(samples, imgs, spotfiles, json)
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
@@ -242,7 +242,7 @@ Read annotations
 
 ```{r}
 
-annotations <- Sys.glob(paths = "../../spaceranger_output/childbraintumor/*/Pathology*")
+annotations <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/Pathology*")
 
 ann <- do.call(rbind, lapply(seq_along(annotations), function(i) {
   a <- setNames(read.csv(file = annotations[i]), nm = c("barcode", "type"))

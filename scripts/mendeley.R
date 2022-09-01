@@ -6,7 +6,7 @@ r.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/f
               "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/6a3c0cf5-34c0-4bcc-baff-dafba8ff55b0?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
               nm = c("CLN_metadata_selections", "SI_metadata_selections"))
 
-sheets.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/310cbbcd-1482-474e-a817-ed78535cc80e?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+sheets.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/256436ac-a62e-41c9-ae43-e18fbd62ff07?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                    "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/de4278fc-1662-4d1e-9738-404948b66a42?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                    "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/86da3d06-a2c6-4ba5-a0a7-f39d498356e2?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
                    nm = c("curated_RNA_rescue_sample_metadata.xlsx", "Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", "Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv"))

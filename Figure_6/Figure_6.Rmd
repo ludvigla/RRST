@@ -664,3 +664,22 @@ dev.off()
 
 ```
 
+# date
+***
+
+```{r}
+
+date()
+
+```
+
+# Session
+***
+
+```{r}
+
+sessionInfo()
+
+```
+
+

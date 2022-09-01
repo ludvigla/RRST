@@ -67,9 +67,9 @@ infoTable <- data.frame(samples, imgs, spotfiles, json)
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
 curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
-curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "include", "RNA_rescue",
-                                                       "project", "experimenter", "processer", "comments",
-                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", "arrayID", "spots_under_tissue",
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "comments",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
+                                                       "arrayID", "spots_under_tissue",
                                                        "genes_detected", "fraction_spots_under_tissue",
                                                        "median_genes_per_spot", "median_UMIs_per_spot", 
                                                        "saturation", "reads_mapped_to_probe_set",

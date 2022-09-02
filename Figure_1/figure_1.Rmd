@@ -78,7 +78,7 @@ json2 <- Sys.glob(paths = "../data/spaceranger_output/prostatecancer/*/spatial/s
 infoTable <- data.frame(samples = c(samples1, samples2), imgs = c(imgs1, imgs2), spotfiles = c(spotfiles1, spotfiles2), json = c(json1, json2))
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../data/sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/RRST_sample_metadata.xlsx")
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "comments",
                                                        "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
                                                        "arrayID", "spots_under_tissue",
@@ -92,9 +92,6 @@ curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date"
                                                        "number_of_panel_genes"))
 
 infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
-
-# Exclude FFPE data
-infoTable <- subset(infoTable, !protocol %in% "FFPE")
 
 ```
 
@@ -135,10 +132,6 @@ MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "
 ***
 
 ```{r fig.width=8, fig.height=5}
-
-MB$protocol <- MB[[]] %>%
-  mutate(protocol = ifelse(protocol == "RNA rescue", "RRST", protocol)) %>%
-  pull(protocol)
 
 p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), show.sb = FALSE,
                     label.by = "protocol",  pt.size = 1.2) &
@@ -213,7 +206,7 @@ Subset genes to include those available in the Visium FFPE probe set.
 
 ```{r}
 
-mouse_probes <- read.csv("sheets/Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv", skip = 5, header = TRUE)
+mouse_probes <- read.csv("../data/sheets/Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv", skip = 5, header = TRUE)
 mouse_probes$gene_name <- do.call(rbind, strsplit(mouse_probes$probe_id, "\\|"))[, 2]
 
 ```
@@ -383,11 +376,6 @@ PC <- WarpImages(PC, verbose = TRUE, transforms = list("1" = list(shift.y = -130
 ***
 
 ```{r fig.width=8, fig.height=5}
-
-PC$protocol <- PC[[]] %>%
-  mutate(protocol = ifelse(protocol == "RNA rescue", "RRST", protocol)) %>%
-  pull(protocol)
-
 
 p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2), 
                     label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &

@@ -66,7 +66,7 @@ json <- Sys.glob(paths = "../data/spaceranger_output/smallintestine/*/spatial/sc
 infoTable <- data.frame(samples, imgs, spotfiles, json)
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../data/sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/RRST_sample_metadata.xlsx")
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "comments",
                                                        "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
                                                        "arrayID", "spots_under_tissue",

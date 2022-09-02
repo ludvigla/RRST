@@ -9,7 +9,7 @@ r.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/f
 sheets.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/256436ac-a62e-41c9-ae43-e18fbd62ff07?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                    "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/de4278fc-1662-4d1e-9738-404948b66a42?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                    "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/86da3d06-a2c6-4ba5-a0a7-f39d498356e2?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
-                   nm = c("curated_RNA_rescue_sample_metadata.xlsx", "Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", "Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv"))
+                   nm = c("RRST_sample_metadata.xlsx", "Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", "Visium_Mouse_Transcriptome_Probe_Set_v1.0_mm10-2020-A.csv"))
 
 bone.annotation.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/0b2a0051-4ea2-4fdb-8dcf-7acfb4ec1191?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                            "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/a5963743-8074-4c57-b4c5-026ba716fc0f?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",

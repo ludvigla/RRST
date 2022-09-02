@@ -57,15 +57,15 @@ Assemble spaceranger output files and merge curated meta data
 ```{r}
 
 # Mouse brain
-samples <- Sys.glob(paths = "../../spaceranger_output/colon/*/filtered_feature_bc_matrix.h5")
-imgs <- Sys.glob(paths = "../../spaceranger_output/colon/*/spatial/tissue_hires_image.png")
-spotfiles <- Sys.glob(paths = "../../spaceranger_output/colon/*/spatial/tissue_positions_list.csv")
-json <- Sys.glob(paths = "../../spaceranger_output/colon/*/spatial/scalefactors_json.json")
+samples <- Sys.glob(paths = "../data/spaceranger_output/colon/*/filtered_feature_bc_matrix.h5")
+imgs <- Sys.glob(paths = "../data/spaceranger_output/colon/*/spatial/tissue_hires_image.png")
+spotfiles <- Sys.glob(paths = "../data/spaceranger_output/colon/*/spatial/tissue_positions_list.csv")
+json <- Sys.glob(paths = "../data/spaceranger_output/colon/*/spatial/scalefactors_json.json")
 
 infoTable <- data.frame(samples, imgs, spotfiles, json)
 infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
 
-curated_metadata <- openxlsx::read.xlsx("../../sheets/curated_RNA_rescue_sample_metadata.xlsx", sheet = 3)
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/RRST_sample_metadata.xlsx")
 curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "comments",
                                                        "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
                                                        "arrayID", "spots_under_tissue",
@@ -126,10 +126,11 @@ CLN <- WarpImages(CLN, verbose = TRUE, transforms = list("1" = list(angle = -90)
 
 Here, the spots were labeled into three major categories: "mucosa", "submucosa" and "muscularis".
 
-The annotations are provided in an Rds file (see below)
+The annotations are provided in an Rds file (see below) so you can skip the next code chunk.
 
 ```{r eval=FALSE}
 
+# Only run if you want to annotate the images
 CLN <- ManualAnnotation(CLN)
 
 ```
@@ -144,13 +145,9 @@ CLN@meta.data[rownames(pre_ann), "labels"] <- pre_ann[, "labels"]
 
 Add a new metadata column with a combined protocol and lung ID label
 
-```{r}
+```{r fig.width=12, fig.height=8}
 
-CLN$cln_id <- CLN[[]] %>%
-  mutate(cln_id = ifelse(paper_id == "1.0", "Sample 1", "Sample 2")) %>%
-  pull(cln_id)
-
-CLN$protocol_sample <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$cln_id))
+CLN$protocol_sample <- gsub(pattern = " ", replacement = "_", paste0(CLN$protocol, "_ID: ", CLN$paper_id))
 ST.FeaturePlot(CLN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_sample")
 
 ```
@@ -266,7 +263,6 @@ th <- theme(panel.background = element_rect(fill = "white", colour = "lightgray"
           legend.title = element_text(size = 16), legend.position = "bottom") 
 
 dt <- CLN[[]] %>% 
-  mutate(protocol = setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[protocol]) %>%
   mutate(labels = factor(setNames(c("Mucosa", "Submucosa", "Muscularis"), 
                                   nm = c("mucosa", "submucosa", "muscularis"))[labels], 
                          levels = c("Mucosa", "Submucosa", "Muscularis")), 
@@ -279,11 +275,11 @@ p1 <- ggplot() +
                  mutate(replicate = setNames(c("rep1", "rep2", "rep1", "rep1", "rep2", "rep1"), 
                                        nm = c("V11M22-349_A1", "V11M22-349_B1", "V11A20-396_A1",
                                               "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1"))[arrayID]) %>%
-                 group_by(labels, cln_id, arrayID, replicate) %>% 
+                 group_by(labels, paper_id, arrayID, replicate) %>% 
                  summarize(Mean = median(nFeature_RNA)), 
                aes(arrayID, Mean, shape = replicate), size = 3) +
     scale_shape_manual(values = c("rep1" = 4, "rep2" = 6)) +
-    facet_grid(cln_id~labels, scales = "free", space = "free") +
+    facet_grid(paper_id~labels, scales = "free", space = "free") +
     labs(y = "", x = "", title = "Unique genes") +
     th +
     scale_y_log10()
@@ -294,11 +290,11 @@ p2 <- ggplot() +
                  mutate(replicate = setNames(c("rep1", "rep2", "rep1", "rep1", "rep2", "rep1"), 
                                        nm = c("V11M22-349_A1", "V11M22-349_B1", "V11A20-396_A1",
                                               "V10S29-108_B1", "V11B18-363_C1", "V11A20-396_C1"))[arrayID]) %>%
-                 group_by(labels, cln_id, arrayID, replicate) %>% 
+                 group_by(labels, paper_id, arrayID, replicate) %>% 
                  summarize(Mean = median(nCount_RNA)), 
                aes(arrayID, Mean, shape = replicate), size = 3) +
     scale_shape_manual(values = c("rep1" = 4, "rep2" = 6)) +
-    facet_grid(cln_id~labels, scales = "free") +
+    facet_grid(paper_id~labels, scales = "free") +
     labs(y = "", x = "", title = "UMI counts") +
     th +
     scale_y_log10()
@@ -415,25 +411,24 @@ ST.FeaturePlot(CLN.subset, features = selected.genes, ncol = 11, grid.ncol = 1, 
 
 ```
 
-### Figure 3 e
+### Figure 3e
 ***
 
 ```{r fig.width=12, fig.height=5}
 
 gg <- cbind(CLN.subset[[]], FetchData(CLN.subset, vars = selected.genes)) %>%
   subset(labels == "mucosa") %>%
-  reshape2::melt(measure.vars = selected.genes) %>%
-  mutate(protocol = setNames(c("RRST", "standard"), nm = c("RNA rescue", "standard"))[protocol])
+  tidyr::gather(variable, value, selected.genes)
 
 ggs <- gg %>% 
-  group_by(protocol, cln_id, variable) %>%
+  group_by(protocol, paper_id, variable) %>%
   summarize(det = paste0(round(sum(value > 0)/n(), digits = 2)*100, "%"))
   
 
 p <- ggplot() +
   geom_violin(data = gg, aes(protocol, value, fill = protocol), scale = "width") +
   geom_label(data = ggs, aes(protocol, -1, fill = protocol, label = det)) +
-  facet_grid(cln_id ~ variable) +
+  facet_grid(paper_id ~ variable) +
   labs(y = "Normalized expression") +
   theme(axis.text.x = element_blank(), 
         axis.title.x = element_blank(),

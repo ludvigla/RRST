@@ -65,10 +65,11 @@ that you can run to reproduce the analyses.
 If you run out of memory in the container, check if you can allocate more with 
 `docker run --memory=<SOME VALUE>`. 
 
-You can get more info [here](https://docs.docker.com/config/containers/resource_constraints/) on the docker website.
-
 You might also want to increase the memory limit in docker. If you run `docker info` you can check how much memory is
 available to docker, e.g. "Total memory: 8GiB". If you have more resources available on your system, you can increase 
 this number. If you are using the Docker desktop app, open it and go to Preferences -> Resources and increase the memory. 
 The docker memory limit puts a limitation on the memory available to the container. 
 For example, if you try to set `--memory=16g` when the the docker memory limit is 8GiB, you will end up with 8GiB. 
+
+You can get more info about how to manage resources [here](https://docs.docker.com/config/containers/resource_constraints/) on   
+the docker website.

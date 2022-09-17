@@ -1,14 +1,12 @@
 # RRST
 
-## TODO
+## Installation guide - docker 
 
-1. Clean up unnecessary files
-3. Test docker container to make sure that the R environment is correct
+The docker installation procedure should take less than 10 minutes.
 
-## Docker instructions
-
-First, make sure that docker is installed on your system. To make sure 
-that the installation was successful, open a terminal window and enter:
+First, make sure that docker is installed on your system. You can find instructions on how to 
+install docker [here](https://docs.docker.com/get-docker/). To make sure that the installation 
+was successful, open a terminal window and enter:
 
 ````
 docker ps
@@ -54,13 +52,7 @@ docker start RRST
 docker stop RRST
 ````
 
-## Running analyses
-
-When you have opened the rstudio server, you should see the 6 figure folders in the 
-file viewer (bottom right). Inside each of these folders, there is an `.Rmd` notebook
-that you can run to reproduce the analyses.
-
-## Trouble shooting
+## Docker trouble shooting
 
 If you run out of memory in the container, check if you can allocate more with 
 `docker run --memory=<SOME VALUE>`. 
@@ -71,5 +63,32 @@ this number. If you are using the Docker desktop app, open it and go to Preferen
 The docker memory limit puts a limitation on the memory available to the container. 
 For example, if you try to set `--memory=16g` when the the docker memory limit is 8GiB, you will end up with 8GiB. 
 
-You can get more info about how to manage resources [here](https://docs.docker.com/config/containers/resource_constraints/) on   
-the docker website.
+You can get more info about how to manage resources [here](https://docs.docker.com/config/containers/resource_constraints/)
+on the docker website.
+
+## Instructions for use - running analyses
+
+When you have opened the rstudio server, you should see the 6 figure folders in the 
+file viewer (bottom right). Inside each of these folders, there is an `.Rmd` notebook
+with instructions that you can run to reproduce the analyses and generate plots used 
+in the manuscript. 
+
+The data needed to run the analyses is stored at Mendeley Data. Instructions on how to 
+download this data can be found in the beginning of each `.Rmd` notebook. 
+
+Supplementary figures are produced in the same `.Rmd` notebooks. For example, supplementary
+figures related to Figure 1 can be produced in the `figure_1.Rmd`.
+
+## System requirements
+
+The code has been tested on a Macbook Pro (2017) with the specs below:
+	* Processor : 3.1 GHz Quad-Core Intel Core i7
+	* Memory : 16 GB 2133 MHz LPDDR3
+	* Graphics : Intel HD Graphics 630 1536 MB
+
+## Software dependencies
+
+You can find details about the R environment used in the `session_info.txt` file. We recommend 
+using the docker image to run the analyses in a reproducible R environment. Using more recent 
+installations of certain R packages may lead to slightly different results, in particular 
+for analyses that use functions from the R packages `Seurat` and `sctransform`.

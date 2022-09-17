@@ -61,14 +61,14 @@ When you have logged in, you should see something like this:
 
 ![rstudio-server](imgs/rstudio_server.png)
 
-You can start and stop the container by running:
+## Docker trouble shooting
+
+You can start and stop the container by running the following commands from the terminal:
 
 ````
 docker start RRST
 docker stop RRST
 ````
-
-## Docker trouble shooting
 
 If you run out of memory in the container, check if you can allocate more with 
 `docker run --memory=<SOME VALUE>`. 

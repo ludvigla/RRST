@@ -52,7 +52,7 @@ This should take you to a login page for an RStudio server where you can enter t
 Please follow the instruction below (Instruction for use) more more information on how to get started with 
 the analysis.
 
-![rstudio-login](imgs/rstudio-login.png)
+![rstudio-login](imgs/rstudio_login.png)
 
 * user name: rstudio
 * password: `YOURPASSWORD` 

@@ -27,6 +27,7 @@ suppressWarnings({
   dir.create("../data/")
   dir.create("../data/genes/")
   dir.create("../data/sheets/")
+  dir.create("../data/R_objects/")
   dir.create("../data/spaceranger_output/")
   dir.create("../data/bone_annotations")
 })
@@ -47,6 +48,9 @@ for (i in seq_along(sheets.files)) {
 for (i in seq_along(sheets.files)) {
   download.file(url = sheets.files[i], destfile = paste0("../data/sheets/bone_annotations/", names(bone.annotation.files)[i]))
 }
+
+# Download R object
+download.file(url = r.files[3], destfile = paste0("../data/R_objects/", names(r.files)[3]))
 
 # Download spaceranger output files
 download.file(url = spaceranger.files[4], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[4]))

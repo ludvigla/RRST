@@ -3,8 +3,9 @@ genes.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/dra
                  nm = c("hgenes.tsv", "mgenes.tsv"))
 
 r.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/ba1d3836-01b4-4b87-bbc1-c2cc6bc8e161?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
-              "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/6a3c0cf5-34c0-4bcc-baff-dafba8ff55b0?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
-              nm = c("CLN_metadata_selections", "SI_metadata_selections"))
+              "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/6a3c0cf5-34c0-4bcc-baff-dafba8ff55b0?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+              "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/4eec7538-3ac0-4fe8-a013-380b6157e185?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
+              nm = c("CLN_metadata_selections", "SI_metadata_selections", "BN_selection"))
 
 sheets.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/256436ac-a62e-41c9-ae43-e18fbd62ff07?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                    "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/de4278fc-1662-4d1e-9738-404948b66a42?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",

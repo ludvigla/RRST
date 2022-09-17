@@ -46,13 +46,13 @@ docker container ls -a
 
 Now you can go open a browser (e.g. Chrome) and enter: `localhost:1337` in the address bar. 
 
-[address-bar](imgs/address_bar.png)
+![address-bar](imgs/address_bar.png)
 
 This should take you to a login page for an RStudio server where you can enter the user name and your password to login.
 Please follow the instruction below (Instruction for use) more more information on how to get started with 
 the analysis.
 
-[rstudio-login](imgs/rstudio-login.png)
+![rstudio-login](imgs/rstudio-login.png)
 
 * user name: rstudio
 * password: `YOURPASSWORD` 

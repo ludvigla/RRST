@@ -84,7 +84,7 @@ on the docker website.
 
 ## Instructions for use - running analyses
 
-All analyses should take less than an hour to run.
+Together, all analyses should take less than an hour to run.
 
 When you have opened the rstudio server, you should see one folder for each main figue in the 
 file viewer pane (bottom right). Inside each of these folders, there is an `.Rmd` notebook

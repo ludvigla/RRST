@@ -125,19 +125,19 @@ SI <- WarpImages(SI, verbose = TRUE, transforms = list("3" = list(angle = -90), 
 
 Add a new metadata column with a combined protocol and lung ID label
 
-```{r fig.width=10, fig.height=10}
-
-SI$paper_id <- "SI"
+```{r fig.width=10, fig.height=14}
 
 SI$protocol_id <- gsub(pattern = " ", replacement = "_", paste0(SI$protocol, "_ID: ", SI$paper_id))
 ST.FeaturePlot(SI, features = "nFeature_RNA", ncol = 3, label.by = "protocol_id")
 
 ```
 
-Add manual annotations
+Add manual annotations. These have already been created so you can skip to the next code chunkwhere we 
+load the annotations from a file.
 
 ```{r eval=FALSE}
 
+# Only run this code if you want to open the annotation app
 SI <- ManualAnnotation(SI, type = "raw")
 
 ```
@@ -185,7 +185,7 @@ ensids$gene_type[grep(pattern = "^RPL|^RPS", x = ensids$gene_name)] <- "rb_prote
 ## Figure 4 c - Biotype content as pie charts
 ***
 
-First, we add a new column to our meta data with approximate storage times (time after sample collection). Then we calculate gene attributes: gene name, gene counts and biotype (gene_type). From this gene attribute `data.frame` we can then calculate percentages of each biotype for each storage time. Note that all biotypes that are not "IG_C_gene", "IG_J_gene", "IG_V_gene", "TR_C_gene", "TR_J_gene", "TR_V_gene", "lncRNA", "protein_coding", "rb_protein_coding" or "mt_protein_coding" are pur in a category called "other". 
+First, we add a new column to our meta data with approximate storage times (time after sample collection). Then we calculate gene attributes: gene name, gene counts and biotype (gene_type). From this gene attribute `data.frame` we can then calculate percentages of each biotype for each storage time. Note that all biotypes that are not "IG_C_gene", "IG_J_gene", "IG_V_gene", "TR_C_gene", "TR_J_gene", "TR_V_gene", "lncRNA", "protein_coding", "rb_protein_coding" or "mt_protein_coding" are put in a category called "other". 
 
 ```{r}
 
@@ -194,7 +194,7 @@ SI$time <- SI[[]] %>%
   mutate(time = factor(case_when(seq_date == "200323" ~ "~ 1 month",
                           seq_date == "200923" ~ "~ 6 months",
                           seq_date %in% c("220404", "220506") ~ "~ 2 years"), 
-                       levels = c("~ 1 month", "~ 6 months", "~ 2 years"))) %>% # ifelse(SI$seq_date %in% c("220404", "220506"), "220404-220506", SI$seq_date)
+                       levels = c("~ 1 month", "~ 6 months", "~ 2 years"))) %>% 
   pull(time)
 
 # calculate gene attributes
@@ -239,6 +239,7 @@ p
 
 ```{r eval=FALSE}
 
+# Export plot
 pdf(file = "plots/biotype_content.pdf", width = 6, height = 6)
 print(p)
 dev.off()
@@ -317,6 +318,7 @@ plot(SI@tools$Staffli@rasterlists$raw$`2`[116:883, 95:860])
 
 ```{r eval=FALSE}
 
+# Export plot
 png(filename = "plots/HE.png", width = 860 - 95, height = 883 - 116)
 par(mar = c(0,0,0,0))
 plot(SI@tools$Staffli@rasterlists$raw$`2`[116:883, 95:860])
@@ -354,6 +356,7 @@ p
 
 ```{r eval=FALSE}
 
+# Export plot
 png(filename = "plots/annotations.png", width = (860 - 95)*2, height = (883 - 116)*2, res = 300)
 print(p)
 dev.off()
@@ -391,6 +394,8 @@ p
 ```
 
 ```{r eval=FALSE}
+
+# Export plot
 pdf(file = "plots/unique_genes_overview.pdf", width = 14, height = 10)
 print(p)
 dev.off()
@@ -456,6 +461,7 @@ p
 
 ```{r eval=FALSE}
 
+# Export plot
 pdf(file = "plots/upset_DE.pdf", width = 6, height = 3)
 print(p)
 dev.off()
@@ -502,36 +508,26 @@ p
 
 ```{r}
 
+# Export plot
 pdf(file = "plots/markers_spatial_enterocytes.pdf", width = 12, height = 8)
 print(p)
 dev.off()
 
 ```
+
 Export H&E images
 
 ```{r eval=FALSE}
 
 for (i in c("2", "5", "13")) {
   im <- SI@tools$Staffli@rasterlists$processed[[i]]
-  png(filename = paste0("HE_", i, ".png"), width = ncol(im), height = nrow(im), res = 300)
+  png(filename = paste0("plots/HE_", i, ".png"), width = ncol(im), height = nrow(im), res = 300)
   par(mar = c(0,0,0,0))
   plot(im)
   dev.off()
 }
 
 ```
-
-
-```{r eval=FALSE}
-
-de.markers %>% mutate(Freq = as.numeric(table(gene)[gene])) %>%
-  filter(Freq == 3) %>%
-  group_by(gene) %>%
-  summarize(Mean = mean(avg_log2FC)) %>%
-  arrange(-Mean)
-
-```
-
 
 # date
 ***

@@ -516,7 +516,7 @@ gene_annotations$gene_type <- ifelse(gene_annotations$gene_name %in% mt.genes, "
 gene_attr$gene_type <- gene_annotations[rownames(gene_attr), "gene_type"]
 gene_attr <- gene_attr %>%
   mutate(observed_in = case_when(RRST_count > 0 & standard_count > 0 ~ "both",
-                                 RRST_count > 0 & standard_count == 0 ~ "RNA_rescue",
+                                 RRST_count > 0 & standard_count == 0 ~ "RRST",
                                  RRST_count == 0 & standard_count > 0 ~ "standard")) %>%
   mutate(gene = rownames(.))
 
@@ -586,10 +586,10 @@ p3
 jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/prostatecancer_biotype_content1.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p1)
 dev.off()
-jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer//prostatecancer_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/prostatecancer_biotype_content2.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p2)
 dev.off()
-jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer//prostatecancer_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
+jpeg("../Suppl_figures/Suppl_Figure_mousebrain_and_prostatecancer/prostatecancer_biotype_content3.jpg", width = 2500, height = 500, res = 200, bg = NA)
 print(p3)
 dev.off()
 

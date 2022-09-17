@@ -57,6 +57,10 @@ the analysis.
 * user name: rstudio
 * password: `YOURPASSWORD` 
 
+When you have logged in, you should see something like this:
+
+![rstudio-server](imgs/rstudio_server.png])
+
 You can start and stop the container by running:
 
 ````

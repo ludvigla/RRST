@@ -30,7 +30,7 @@ suppressWarnings({
   dir.create("../data/")
   dir.create("../data/genes/")
   dir.create("../data/sheets/")
-  dire.create("../data/R_objects/")
+  dir.create("../data/R_objects/")
   dir.create("../data/spaceranger_output/")
 })
 

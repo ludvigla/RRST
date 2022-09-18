@@ -14,7 +14,15 @@ docker ps
 
 You should be able to execute this command without any issues. 
 
-Next, you need to clone the GitHub repo:
+Next, you need to clone the GitHub repo. First, you need to make sure that you switch to the GitHub user 
+that has access to this repo. For example:
+
+````
+git config --global user.name "Bob"
+git config --global user.email "bob@example.com"
+````
+
+And once we have switched to account with access to this private repo, we can clone the repo:
 
 ````
 git clone https://github.com/ludvigla/RRST
@@ -84,7 +92,8 @@ on the docker website.
 
 ## Instructions for use - running analyses
 
-Together, all analyses should take less than an hour to run.
+Together, all analyses should take less than an hour to run on a laptop with specs comparable to
+those specified under System requirements below.
 
 When you have opened the rstudio server, you should see one folder for each main figue in the 
 file viewer pane (bottom right). Inside each of these folders, there is an `.Rmd` notebook
@@ -96,6 +105,11 @@ download this data can be found in the beginning of each `.Rmd` notebook.
 
 Supplementary figures are produced in the same `.Rmd` notebooks. For example, supplementary
 figures related to Figure 1 can be produced in the `figure_1.Rmd` notebook.
+
+All main figure plots exported in the notebooks are available in the `plots/` sub folders inside 
+each figure folder. Supplementary figures are located in the `Suppl_figures/folder`. The expected 
+output (plots) from the notebooks should be comparable to these exported figures and the figures 
+in the manuscript.
 
 ## System requirements
 

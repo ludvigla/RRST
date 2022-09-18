@@ -15,7 +15,7 @@ docker ps
 You should be able to execute this command without any issues. 
 
 Next, you need to clone the GitHub repo. First, you need to make sure that you switch to the GitHub user 
-that has access to this repo. For example:
+that has access to this repo. You can set the `user.name` and `user.email` with the following commands:
 
 ````
 git config --global user.name "Bob"

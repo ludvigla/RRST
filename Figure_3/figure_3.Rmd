@@ -21,7 +21,17 @@ library(dplyr)
 
 ```
 
-Download files from Mendeley.
+# Download files from Mendeley Data 
+***
+
+Note that you only have to run this code chunk once. If you are having issue downloading files, please make sure that 
+you have a stable internet connection and that Mendeley Data (https://data.mendeley.com/) is up and running.
+
+These files should be downloaded without any issue. If you encounter any errors, some of the code in this 
+notebook will be possible to run.
+
+If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
+put them in a folder called `data/` at the root of the project.
 
 ```{r eval=FALSE}
 
@@ -60,7 +70,6 @@ Assemble spaceranger output files and merge curated meta data
 
 ```{r}
 
-# Mouse brain
 samples <- Sys.glob(paths = "../data/spaceranger_output/colon/*/filtered_feature_bc_matrix.h5")
 imgs <- Sys.glob(paths = "../data/spaceranger_output/colon/*/spatial/tissue_hires_image.png")
 spotfiles <- Sys.glob(paths = "../data/spaceranger_output/colon/*/spatial/tissue_positions_list.csv")

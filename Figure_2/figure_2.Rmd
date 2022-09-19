@@ -22,7 +22,17 @@ library(scico)
 
 ```
 
-Download files from Mendeley.
+# Download files from Mendeley Data 
+***
+
+Note that you only have to run this code chunk once. If you are having issue downloading files, please make sure that 
+you have a stable internet connection and that Mendeley Data (https://data.mendeley.com/) is up and running.
+
+These files should be downloaded without any issue. If you encounter any errors, some of the code in this 
+notebook will be possible to run.
+
+If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
+put them in a folder called `data/` at the root of the project.
 
 ```{r eval=FALSE}
 
@@ -57,7 +67,6 @@ Assemble spaceranger output files and merge curated meta data
 
 ```{r}
 
-# Mouse brain
 samples <- Sys.glob(paths = "../data/spaceranger_output/lung/*/filtered_feature_bc_matrix.h5")
 imgs <- Sys.glob(paths = "../data/spaceranger_output/lung/*/spatial/tissue_hires_image.png")
 spotfiles <- Sys.glob(paths = "../data/spaceranger_output/lung/*/spatial/tissue_positions_list.csv")
@@ -226,10 +235,6 @@ LNGList <- lapply(unique(LNG.subset$protocol_lng), function(i) {
 6. Find clusters using Louvain algorithm
 7. Create a UMAP using the first 20 PCs as input
 
-```{r include=FALSE}
-LNGList <- readRDS(file = "R_objects/LNGList")
-```
-
 
 ```{r eval=FALSE}
 
@@ -265,15 +270,6 @@ DimPlot(LNGList[[3]]) & ggtitle("LNG2 - RRST") | DimPlot(LNGList[[4]]) & ggtitle
 ***
 
 Run DEA with an avg_log2FC threshold of 0.5 and adjusted p-value < 0.01.
-
-```{r include=FALSE}
-
-# Only run for rmarkdown knitr so that the next code chunk can be skipped
-de.markers.list.025 <- readRDS(file = "R_objects/de.markers.list.025")
-de.markers.list <- readRDS(file = "R_objects/de.markers.list")
-
-```
-
 
 ```{r eval=FALSE}
 
@@ -551,6 +547,7 @@ p
 
 ```{r eval=FALSE}
 
+# Export image
 pdf(file = "../Suppl_figures/Suppl_Figure_lung_LNG2_analysis/suppl_figure_lung_LNG2_patchwork.pdf", width = 26, height = 20)
 print(p)
 dev.off()

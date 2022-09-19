@@ -18,6 +18,12 @@ bone.annotation.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6k
                            "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/acbf1c46-f123-4003-9a2a-8aed6492477b?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
                            nm = c("mouse growth plateA1 p4.csv", "mouse growth plateB1 p4.csv", "mouse growth plateC1 p11.csv", "mouse growth plateD1 p11.csv"))
 
+PBT.pathology.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/1c2777c0-3521-46e3-9064-bb4c05a0fd7d?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+                                  "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/696e30e5-3407-41a1-8972-415e1ac2ad72?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+                                  "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/d7b57424-82b3-4929-849f-e3b41a2b66b8?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
+                                  "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/e5d6785a-bfd8-4380-b33c-aa4b667f5e5f?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8"),
+                                nm = c("Pathology_V11Y03-081_A1_FFPE.csv", "Pathology_V11Y03-081_B1_FFPE.csv", "Pathology_V11Y03-081_C1_FFPE.csv", "Pathology_V11Y03-081_D1_FFPE.csv"))
+
 spaceranger.files <- setNames(c("https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/efdb0108-8af0-4f33-9b56-d151e20678e2?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/0992dff5-8f56-472a-bc66-10b5acffe700?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",
                                 "https://data.mendeley.com/api/datasets/4w6krnywhn/draft/files/1e298325-38ea-4ae2-8b52-184847a442ab?inline=true&a=eafe3c2d-708d-44a5-b72f-f60b9e158db8",

@@ -1,0 +1,930 @@
+---
+title: "Figure 6 and 7"
+author: "Ludvig Larsson"
+date: '2022-07-11'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(STutility)
+library(magrittr)
+library(dplyr)
+library(patchwork)
+
+```
+
+# Download files from Mendeley Data 
+***
+
+Note that you only have to run this code chunk once. If you are having issue downloading files, please make sure that 
+you have a stable internet connection and that Mendeley Data (https://data.mendeley.com/) is up and running.
+
+These files should be downloaded without any issue. If you encounter any errors, some of the code in this 
+notebook will be possible to run.
+
+If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
+put them in a folder called `data/` at the root of the project.
+
+```{r eval=FALSE}
+
+# Create data directories
+suppressWarnings({
+  dir.create("../data/")
+  dir.create("../data/genes/")
+  dir.create("../data/sheets/")
+  dir.create("../data/sheets/bone_annotations/")
+  dir.create("../data/R_objects/")
+  dir.create("../data/spaceranger_output/")
+})
+
+source("../scripts/mendeley.R")
+
+# Download gene annotation files
+for (i in seq_along(genes.files)) {
+  download.file(url = genes.files[i], destfile = paste0("../data/genes/", names(genes.files)[i]))
+}
+
+# Download gene annotation files
+for (i in seq_along(sheets.files)) {
+  download.file(url = sheets.files[i], destfile = paste0("../data/sheets/", names(sheets.files)[i]))
+}
+
+# Download bone annotation files
+for (i in seq_along(bone.annotation.files)) {
+  download.file(url = bone.annotation.files[i], destfile = paste0("../data/sheets/bone_annotations/", names(bone.annotation.files)[i]))
+}
+
+# Download R object
+download.file(url = r.files[3], destfile = paste0("../data/R_objects/", names(r.files)[3]))
+
+# Download spaceranger output files
+download.file(url = spaceranger.files[4], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[4]))
+untar(tarfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[4]), exdir = "../data/spaceranger_output/")
+file.remove(paste0("../data/spaceranger_output/", names(spaceranger.files)[4]))
+
+```
+
+Create raw Seurat object
+
+```{r}
+
+samples <- list.files(path = "../data/spaceranger_output/mousebone", pattern = "filtered", recursive = TRUE, full.names = TRUE)
+imgs <- list.files(path = "../data/spaceranger_output/mousebone", pattern = "tissue_hires_image.png", recursive = TRUE, full.names = TRUE)
+spotfiles <- list.files(path = "../data/spaceranger_output/mousebone", pattern = "tissue_positions_list.csv", recursive = TRUE, full.names = TRUE)
+json <- list.files(path = "../data/spaceranger_output/mousebone", pattern = "scalefactors_json.json", recursive = TRUE, full.names = TRUE)
+
+infoTable <- data.frame(samples, imgs, spotfiles, json)
+infoTable <- cbind(infoTable, arrayID = do.call(rbind, strsplit(infoTable$samples, "/"))[, 5])
+
+curated_metadata <- openxlsx::read.xlsx("../data/sheets/RRST_sample_metadata.xlsx")
+curated_metadata <- setNames(curated_metadata, nm = c("storage_time", "seq_date", "comments",
+                                                       "ID", "paper_id", "RIN", "DV200", "protocol", "source", 
+                                                       "arrayID", "spots_under_tissue",
+                                                       "genes_detected", "fraction_spots_under_tissue",
+                                                       "median_genes_per_spot", "median_UMIs_per_spot", 
+                                                       "saturation", "reads_mapped_to_probe_set",
+                                                       "reads_mapped_confidently_to_probe_set",
+                                                       "reads_mapped_confidently_to_filtered_probe_set",
+                                                       "reads_mapped_to_genome",
+                                                       "reads_mapped_confidently_to_genome",
+                                                       "number_of_panel_genes"))
+
+infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
+
+```
+
+```{r}
+
+BN <- InputFromTable(infoTable[c(1, 3, 4, 2, 5, 6), ])
+
+```
+
+Check spatial distribution of unique genes.
+
+```{r}
+
+BN$protocol_day <- paste0(BN$protocol, ": ", BN$paper_id)
+ST.FeaturePlot(BN, features = "nFeature_RNA", ncol = 3, label.by = "protocol_day")
+
+```
+Violin plots of unique genes, split by arrayID and colored by protocol.
+
+```{r}
+
+VlnPlot(BN, features = "nFeature_RNA", group.by = "arrayID", split.by = "protocol")
+
+```
+
+Load H&E images into Seurat object.
+
+```{r eval=FALSE}
+
+BN <- LoadImages(BN, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+Select bone/cartilage spots. The selections were made using the `ManualAnnotation` function,
+but we have the selections available in an Rds object that we can load into R.
+
+```{r eval=FALSE}
+
+# Uncomment if you want to label spots
+# BN <- ManualAnnotation(BN)
+
+# Load prepared annotations
+bone.selection <- readRDS("../data/R_objects/BN_selection")
+BN$labels <- bone.selection$labels
+
+```
+
+Apply rotations to the H&E images to obtain a rough alignment of the tissue sections.
+
+```{r}
+
+BN <- WarpImages(BN, transforms = list("1" = list(angle = -50), 
+                                       "3" = list(angle = -110), 
+                                       "4" = list(angle = 130), 
+                                       "6" = list(angle = -50)))
+
+```
+
+## Suppl. Figure 11 a and b - unique genes and UMIs in cartilage/bone and across time points
+***
+
+```{r}
+
+gg <- BN[[]] %>% 
+  mutate(labels = case_when(labels == "cartilage_bone" ~ "cartilage/bone",
+                            labels == "Default" ~ "surrounding tissue"),
+         ID = factor(ID, levels = c("P4T", "P11T")))
+
+plot_UG <- ggplot() +
+    geom_violin(data = gg, aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") +
+    geom_hline(data = gg %>% group_by(labels, ID, protocol) %>% summarize(Median = median(nFeature_RNA)), aes(yintercept = Median), 
+               linetype = "longdash", color = "#3A3B3C") +
+    geom_label(data = gg %>% group_by(labels, ID, protocol) %>% summarize(Median = round(median(nFeature_RNA))), 
+               aes(x = "A", y = Median, label = Median)) +
+    facet_grid(labels~ID, scales = "free") +
+    labs(fill = "", x = "Unique genes", y = "Count") +
+    theme_minimal() +
+    theme(strip.background = element_rect(fill = "#3A3B3C"), strip.text = element_text(face = "bold", colour = "white", size = 12)) +
+    scale_fill_brewer(palette = "Pastel2") +
+    theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 12, color = "black"), legend.position = "none", 
+          axis.text.y = element_text(size = 12, color = "black")) +
+    labs(x = "", y = "") +
+    scale_x_discrete(labels = c("", "rep1", "rep1", "rep2"))
+
+plot_UMI <- ggplot() +
+    geom_violin(data = gg, aes(arrayID, nCount_RNA, fill = protocol), scale = "width") +
+    geom_hline(data = gg %>% group_by(labels, ID, protocol) %>% summarize(Median = median(nCount_RNA)), aes(yintercept = Median), 
+               linetype = "longdash", color = "#3A3B3C") +
+    geom_label(data = gg %>% group_by(labels, ID, protocol) %>% summarize(Median = round(median(nCount_RNA))), 
+               aes(x = "A", y = Median, label = Median)) +
+    scale_y_log10() +
+    facet_grid(labels~ID, scales = "free") +
+    labs(fill = "", x = "Unique genes", y = "Count") +
+    theme_minimal() +
+    theme(strip.background = element_rect(fill = "#3A3B3C"), strip.text = element_text(face = "bold", colour = "white", size = 12)) +
+    scale_fill_brewer(palette = "Pastel2") +
+    theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 12, color = "black"), legend.position = "none", 
+          axis.text.y = element_text(size = 12, color = "black")) +
+    labs(x = "", y = "") +
+    scale_x_discrete(labels = c("", "rep1", "rep1", "rep2"))
+
+plot_UG
+plot_UMI
+
+```
+
+## Suppl. Figure 11 c-f - Spatial plots
+***
+
+HE_plots : H&E images (c)
+bone_plots : spots labeled as cartilage/bone (d)
+UG_plots : unique genes mapped on H&E images (e)
+UMI_plots : UMI counts mapped on H&E images (f)
+
+First, we define a crop window for each tissue section so that we can remove the background. 
+We also define limits for the number of unique genes and UMI so that the color bars are 
+identical for each tissue section.
+
+```{r}
+
+# Define crop windows
+limits_list <- list("1" = c(x_start = 540, y_start = 490, x_end = 540 + 1150, y_end = 490 + 1150),
+                    "3" = c(x_start = 624, y_start = 621, x_end = 624 + 1150, y_end = 621 + 1150), 
+                    "4" = c(x_start = 380, y_start = 255, x_end = 380 + 1150, y_end = 255 + 1150), 
+                    "6" = c(x_start = 480, y_start = 330, x_end = 480 + 1100, y_end = 330 + 1100))
+
+# Define limits for unique genes and UMI counts
+gg <- cbind(BN[[]], GetStaffli(BN)@meta.data)
+gg$UMIs <- log10(gg$nCount_RNA)
+UG_limits <- gg %>%
+    summarize(max = max(nFeature_RNA))
+UG_limits <- setNames(UG_limits$max, nm = UG_limits$variable)
+UMI_limits <- gg %>%
+    summarize(max = max(UMIs))
+UMI_limits <- setNames(UMI_limits$max, nm = UMI_limits$variable)
+
+```
+
+Now we create the plots for c-f.
+
+```{r}
+
+# Create H&E plots
+HE_plots <- setNames(lapply(c("1", "3", "4", "6"), function(i) {
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[paste0(i)]]
+  dims <- GetStaffli(BN)@dims[[i]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf,
+           limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) 
+  return(p)
+}), nm = c("1", "3", "4", "6"))
+
+
+# Create UG spatial plot
+UG_plots <- setNames(lapply(c("1", "3", "4", "6"), function(i) {
+  
+  # Get meta data and coordinates
+  gg <- cbind(BN[[]], GetStaffli(BN)@meta.data)
+  gg <- subset(gg, sample == i)
+  dims <- GetStaffli(BN)@dims[[i]]
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[paste0(i)]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    geom_point(data = gg, aes(warped_x, dims$height - warped_y, fill = nFeature_RNA), 
+               size = 1.2, shape = 21, stroke = 0) +
+    theme_void() +
+    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
+    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
+    labs(fill = "") +
+    guides(fill = guide_colorbar(title.position = "top", title.hjust = 0.5)) +
+    scale_fill_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "Spectral") %>% rev(), 
+                         limits = c(0, UG_limits)) 
+  # Put the legend on top of section 1
+  if (i == "1") {
+    p <- p + theme(legend.position = "top", plot.margin = margin(r = 3, b = 3),
+                   legend.key.height = unit(0.4, 'cm'),
+                   legend.key.width = unit(1, 'cm'))
+  } else {
+    p <- p + theme(legend.position = "none")
+  }
+
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+  return(p)
+}), nm = c("1", "3", "4", "6"))
+
+
+# Create spatial UMI plots
+UMI_plots <- setNames(lapply(c("1", "3", "4", "6"), function(i) {
+  
+  # Get meta data and coordinates
+  gg <- cbind(BN[[]], GetStaffli(BN)@meta.data)
+  gg <- subset(gg, sample == i)
+  gg$UMIs <- log10(gg$nCount_RNA)
+  dims <- GetStaffli(BN)@dims[[i]]
+  
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[paste0(i)]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    geom_point(data = gg, aes(warped_x, dims$height - warped_y, fill = UMIs), 
+               size = 1.2, shape = 21, stroke = 0) +
+    theme_void() +
+    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
+    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
+    labs(fill = "") +
+    guides(fill = guide_colorbar(title.position = "top", title.hjust = 0.5)) +
+    scale_fill_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "Spectral") %>% rev(), 
+                         limits = c(0, UMI_limits), labels= c(1, 10, 100, 1000, 10000)) 
+  
+  # Put the legend on top of section 1
+  if (i == "1") {
+    p <- p + theme(legend.position = "top", plot.margin = margin(r = 3, b = 3),
+                   legend.key.height = unit(0.4, 'cm'),
+                   legend.key.width = unit(1, 'cm'))
+  } else {
+    p <- p + theme(legend.position = "none")
+  }
+
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+  return(p)
+}), nm = c("1", "3", "4", "6"))
+
+
+# Plot annotations
+bone_plots <- setNames(lapply(c("1", "3", "4", "6"), function(i) {
+  
+  # Get meta data and coordinates
+  gg <- cbind(BN[[]], GetStaffli(BN)@meta.data)
+  gg <- subset(gg, sample == i)
+  gg$UMIs <- log10(gg$nCount_RNA)
+  dims <- GetStaffli(BN)@dims[[i]]
+  
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[paste0(i)]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    geom_point(data = gg %>% mutate(labels = case_when(labels == "cartilage_bone" ~ "cartilage/bone",
+                                                       TRUE ~ "surrounding tissue")), aes(warped_x, dims$height - warped_y, fill = labels), 
+               size = 1.2, shape = 21, stroke = 0) +
+    theme_void() +
+    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
+    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
+    labs(fill = "") +
+    guides(fill = guide_legend(title.position = "top", title.hjust = 0.5, override.aes = list(size = 7))) +
+    scale_fill_manual(values = c("surrounding tissue" = "lightgray", "cartilage/bone" = "orange"))
+  
+  # Put the legend on top of section 1
+  if (i == "1") {
+    p <- p + theme(legend.position = "top", plot.margin = margin(r = 3, b = 3),
+                   legend.key.height = unit(0.4, 'cm'),
+                   legend.key.width = unit(1, 'cm'))
+  } else {
+    p <- p + theme(legend.position = "none")
+  }
+
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+  return(p)
+}), nm = c("1", "3", "4", "6"))
+
+```
+
+Now we can create a patchwork of our plots using the patchwork R package.
+
+Suppl figure patchwork
+
+```{r fig.width=7, fig.height=10}
+
+design = c(
+  area(1, 1, 2, 2),
+  area(1, 3, 2, 4),
+  
+  area(3, 1, 3, 1), 
+  area(3, 2, 3, 2), 
+  area(3, 3, 3, 3), 
+  area(3, 4, 3, 4),
+  
+  area(4, 1, 4, 1), 
+  area(4, 2, 4, 2), 
+  area(4, 3, 4, 3), 
+  area(4, 4, 4, 4),
+  
+  area(5, 1, 5, 1), 
+  area(5, 2, 5, 2),
+  area(5, 3, 5, 3), 
+  area(5, 4, 5, 4),
+  
+  area(6, 1, 6, 1), 
+  area(6, 2, 6, 2),
+  area(6, 3, 6, 3), 
+  area(6, 4, 6, 4))
+
+spatial_QC <- 
+  plot_UG +
+  plot_UMI +
+  HE_plots$`1` +
+  HE_plots$`3` +
+  HE_plots$`4` +
+  HE_plots$`6` +
+  bone_plots$`1` + 
+  bone_plots$`3` + 
+  bone_plots$`4` + 
+  bone_plots$`6` + 
+  UG_plots$`1` + 
+  UG_plots$`3` + 
+  UG_plots$`4` + 
+  UG_plots$`6` + 
+  UMI_plots$`1` + 
+  UMI_plots$`3` + 
+  UMI_plots$`4` + 
+  UMI_plots$`6` + 
+  plot_layout(design = design, heights = c(0.8, 0.8, 1, 1, 1, 1))
+
+spatial_QC
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "../Suppl_figures/Suppl_Figure_mBone/patchwork_mBone_suppl.pdf", width = 12, height = 16)
+print(spatial_QC)
+dev.off()
+
+```
+
+## Figure 6a - Violin plots
+***
+
+These violin plots show the distribution of unique genes for each tissue section dataset,
+split into two facets (P4 or P11) and colored by protocol. The y-axis values are log10-transformed.
+
+```{r fig.width=3.5, fig.height=6}
+
+BN$paper_id <- BN[[]] %>%
+  mutate(paper_id = factor(paper_id, levels = c("P4", "P11"))) %>%
+  pull(paper_id)
+
+p_violin <- ggplot() + 
+  geom_violin(data = BN[[]], aes(arrayID, nFeature_RNA, fill = protocol), scale = "width") +
+  geom_jitter(size = 0.1) +
+  labs(x = "", y = "Unique genes") +
+  geom_hline(data = BN[[]] %>% 
+               group_by(protocol, paper_id) %>%
+               summarize(Mean = mean(nFeature_RNA)), aes(yintercept = Mean), linetype = "longdash") +
+  geom_label(data = BN[[]] %>% 
+               group_by(protocol, paper_id) %>%
+               summarize(Mean = round(mean(nFeature_RNA))), aes("A", Mean, label = Mean, fill = protocol),
+             show.legend = FALSE, size = 5) +
+  facet_wrap(paper_id~., scales = "free", ncol = 1) +
+  scale_y_log10() +
+  scale_x_discrete(labels = c("", "Rep1", "Rep1", "Rep2")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), #legend.position = "none", 
+        strip.text = element_text(size = 16, colour = "black", face = "bold"),
+        axis.text = element_text(size = 14, colour = "black"),
+        axis.title = element_text(size = 16, colour = "black", face = "bold"))
+
+p_violin
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+pdf(file = "plots/violin_QC.pdf", width = 5.5, height = 8)
+print(p_violin)
+dev.off()
+
+```
+
+From this point on, we will only work with the RRST data.
+
+Load RRST data only, excluding data generated with standard Visium.
+
+```{r}
+
+BN <- InputFromTable(infoTable[3:6, ])
+
+```
+
+As before, we need to load the images into our `Seurat` object with the `LoadImages` function 
+to enable mapping of feature values onto the H&E images.
+
+```{r eval=FALSE}
+
+BN <- LoadImages(BN, time.resolve = FALSE, xdim = 1e3)
+
+```
+
+## Filter
+***
+
+Filter data to keep RRST data and spots with at least 500 unique genes.
+
+```{r}
+
+BN <- SubsetSTData(BN, expression = protocol %in% "RRST")
+BN <- SubsetSTData(BN, expression = nFeature_RNA > 500)
+
+```
+
+## Normalization
+***
+
+Normalize data using `SCTransform`.
+
+```{r}
+
+BN <- SCTransform(BN)
+
+```
+
+## Matrix factorization
+***
+
+Non-negative Matrix Factorization (NNMF) is useful as an exploratory tool to identify transcriptional programs in Visium data.
+
+In brief, the gene expression matrix (`A`) is decomposed into matrices `W` and `H`:
+
+* `A` : expression matrix genes x spots
+* `W` : genes x factors
+* `H` : factors x spots
+
+where the number of factors (k) is a predefined value. The constraint for non-negativity makes it easier to interpret the factors as compared to e.g. Principal Component Analysis. Rows in `W` provide a measure of the relative contribution of genes to each factors which makes it possible to obtain biological insights. On the other hand, columns in `H` measure the relative contribution of spots to each factor which makes it possible to visualize where in the tissue the factors are active.
+
+The interpretation of what a factor represents is not crystal clear, but they often represent sources of biological variation in the tissue data. A factor could for example correspond to a cell type, two co-localized cell types or a biological pathway. This can however be extremely useful, especially when there is no scRNA-seq data available to conduct cell type mapping with. 
+
+```{r eval=FALSE}
+
+BN <- STutility::RunNMF(BN, nfactors = 30)
+
+```
+
+Apply rotations to two of the tissue sections that will will be used for the figures.
+
+```{r}
+
+BN <- WarpImages(BN, transforms = list("2" = list(angle = -110), "4" = list(angle = -50)))
+ImagePlot(BN, method = "raster", indices = c(2, 4), annotate = FALSE)
+
+```
+
+## Figure 6
+***
+
+First, we define two crop windows that we will use to cut out a smaller piece 
+of tissue sections 2 and 4. Then, we also need to define the limits for each factor
+so that we can an identical color bar in the plots.
+
+```{r}
+
+limits_list <- list("4" = c(x_start = 480, y_start = 330, x_end = 480 + 1100, y_end = 330 + 1100),
+                    "2" = c(x_start = 624, y_start = 621, x_end = 624 + 1150, y_end = 621 + 1150))
+factor_limits <- apply(BN@reductions$NMF@cell.embeddings, 2, max)
+
+gg <- cbind(BN[[]], GetStaffli(BN)@meta.data, BN@reductions$NMF@cell.embeddings) %>%
+    reshape2::melt(measure.vars = colnames(BN@reductions$NMF@cell.embeddings)) %>%
+    group_by(variable) %>%
+    mutate(value = ifelse(value < quantile(value, 0.99), value, quantile(value, 0.99)))
+factor_limits <- gg %>%
+    summarize(max = max(value))
+factor_limits <- setNames(factor_limits$max, nm = factor_limits$variable)
+
+```
+
+Now we can generate the spatial factor plots and factor gene loading plots.
+
+factorplots : spatial maps of factor activities
+factorloadings : bar chart showing the top contributing genes per factor
+
+```{r}
+
+# Generate spatial factor maps
+factorplots <- setNames(lapply(c("2", "4"), function(i) {
+  
+  # Get meta data and coordinates
+  gg <- subset(gg, sample == i) %>%
+    group_by(variable) %>%
+    mutate(alpha = scales::rescale(value))
+  dims <- GetStaffli(BN)@dims[[i]]
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[i]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  plots <- lapply(colnames(BN@reductions$NMF@cell.embeddings), function(fctr) {
+    p <- ggplot() +
+      annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+      geom_point(data = subset(gg, variable == fctr), aes(warped_x, dims$height - warped_y, fill = value), 
+                 size = 1.5, alpha = subset(gg, variable == fctr)$alpha, shape = 21, stroke = 0) +
+      theme_void() +
+      scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
+      scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
+      labs(fill = "factor\nactivity") +
+      scale_fill_gradientn(colours = viridis::viridis(n = 11), limits = c(0, factor_limits[fctr]))
+  
+    if (i == "2") {
+      p <- p +
+        theme(legend.position = "top", 
+            legend.title = element_text(size = 14, colour = "black"), 
+            legend.text = element_text(color = "black", size = 12), 
+            plot.margin = margin(t = 0, r = 0, b = 3, l = 0))
+    } else {
+      p <- p + 
+        theme(legend.position = "none", plot.margin = margin(t = 0, r = 10, b = 3, l = 0))
+    }
+    
+    p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+    return(p)
+  })
+  plots <- setNames(plots, nm = colnames(BN@reductions$NMF@cell.embeddings))
+  return(plots)
+}), nm = c("2", "4"))
+
+# Generate bar charts with top contributing genes
+factorloadings <- setNames(lapply(1:30, function(fctr) {
+  p <- FactorGeneLoadingPlot(BN, factor = fctr, topn = 40) +
+    theme(axis.title = element_blank(), axis.text = element_text(size = 14, color = "black")) +
+    labs(title = paste0("factor_", fctr))
+  return(p)
+}), nm = paste0("factor_", 1:30))
+
+```
+
+## Figure 6 b-e - spatial factor maps
+***
+
+We'll leave the top left corner empty for panel a.
+
+```{r fig.width=6, fig.height=7}
+
+design <- c(
+  patchwork::area(1, 1, 2, 2),
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 3, 2, 3),
+  patchwork::area(2, 4, 2, 4),
+  
+  patchwork:::area(3, 1, 3, 4),
+  
+  patchwork::area(4, 1, 4, 1),
+  patchwork::area(4, 2, 4, 2),
+  patchwork::area(5, 1, 5, 1),
+  patchwork::area(5, 2, 5, 2),
+  
+  patchwork::area(4, 3, 4, 3),
+  patchwork::area(4, 4, 4, 4),
+  patchwork::area(5, 3, 5, 3),
+  patchwork::area(5, 4, 5, 4)
+)
+
+p <- patchwork::plot_spacer() +
+  factorplots$`2`$factor_12 +
+  factorplots$`2`$factor_2 +
+  factorplots$`4`$factor_12 +
+  factorplots$`4`$factor_2 +
+  patchwork::plot_spacer() +
+  factorplots$`2`$factor_1 +
+  factorplots$`2`$factor_11 +
+  factorplots$`4`$factor_1 +
+  factorplots$`4`$factor_11 +
+  factorplots$`2`$factor_6 +
+  factorplots$`2`$factor_7 +
+  factorplots$`4`$factor_6 +
+  factorplots$`4`$factor_7 +
+  patchwork::plot_layout(design = design, heights = c(1, 1, 0.3, 1, 1))
+p
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/figure_6_patchwork.pdf", width = 12, height = 15)
+print(p)
+dev.off()
+
+```
+
+## Suppl figure - factor gene loadings
+***
+
+```{r fig.width=8, fig.height=8}
+
+design <- c(
+  patchwork::area(1, 1, 1, 1),
+  patchwork::area(1, 2, 1, 2),
+  patchwork::area(1, 3, 1, 3),
+  patchwork::area(1, 4, 1, 4),
+  patchwork::area(2, 1, 2, 4),
+  patchwork::area(3, 1, 3, 1),
+  patchwork::area(3, 2, 3, 2)
+)
+
+p <- 
+  factorloadings$factor_12 +
+  factorloadings$factor_2 +
+  factorloadings$factor_1 +
+  factorloadings$factor_11 +
+  patchwork::plot_spacer() +
+  factorloadings$factor_6 +
+  factorloadings$factor_7 +
+  patchwork::plot_layout(design = design, heights = c(1, 0.3, 1))
+p
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "../Suppl_figures/Suppl_Figure_factor_loadings/factor_loadings.pdf", width = 15, height = 18)
+print(p)
+dev.off()
+
+```
+
+Now, we'll load the bone annotations. These annotations were made using the 10x Genomics 
+Loupe Browser Desktop Application.
+
+One the data is added to our `Seurat` object, we can subset the data to only include spots
+that are labeled as one of the following categories:
+
+"articular cartilage", "hypertrophic", "hypertrophic zone", "pre-Hypertrophic zone", 
+"proliferative zone", "resting zone", "SOC" or "SOC-adjacent resting zone"
+
+```{r eval=FALSE}
+
+# Read annotations
+ann.files <- list.files("../data/sheets/bone_annotations", full.names = TRUE)
+annotations <- do.call(rbind, lapply(seq_along(ann.files), function(i) {
+  f <- ann.files[i]
+  ann <- read.csv(f, check.names = FALSE)
+  rownames(ann) <- paste0(ann$Barcode, "_", i)
+  ann$section_id <- i
+  return(ann)
+}))
+
+annotations <- annotations %>% mutate(labels = case_when(`mouse growth plate` == "hypertrophic" ~ "hypertrophic zone",
+                                                         `mouse growth plate` == "pre-Hypertrophic" ~ "pre-Hypertrophic zone",
+                                          `mouse growth plate` == "proliferative" ~ "proliferative zone",
+                                          `mouse growth plate` == "resting" ~ "resting zone",
+                                          TRUE ~ `mouse growth plate`))
+
+BN$annotation <- annotations[colnames(BN), "labels"]
+BN <- SubsetSTData(BN, expression = annotation != "")
+
+```
+
+Now can can conduct differential gene expression analysis (DEA) to extract marker genes from each zone.
+
+First, we need to set the identity of the `Seurat` object to "annotations" so that the DEA method
+can recognize that the test should be conducted on the manually selected regions.
+
+We also need to normalize and scale the data before running the DEA.
+
+```{r}
+
+DefaultAssay(BN) <- "RNA"
+
+# Set ident to "annotation" before running DEA
+BN <- SetIdent(BN, value = BN$annotation)
+
+# Normalize and scale data
+BN <- BN %>% 
+  NormalizeData() %>% 
+  ScaleData()
+
+```
+
+Now we can apply `FindAllMarkers` to extract marker genes for each manually annotated zone.
+
+```{r eval=FALSE}
+
+de.markers.bone.annotations <- FindAllMarkers(BN, only.pos = TRUE, logfc.threshold = 0.25)
+
+```
+
+Now we are ready to produce the plots for Figure 7.
+
+## Figure 7 - visualization of annotations and DE marker genes
+***
+
+Create plots for panel a.
+
+```{r}
+
+gg <- cbind(BN[[]], GetStaffli(BN)@meta.data)
+cols <- c("articular cartilage"  = "#332288", 
+          "hypertrophic zone" = "#88CCEE", 
+          "pre-Hypertrophic zone" = "#44AA99", 
+          "proliferative zone" = "#117733", 
+          "resting zone" = "#DDCC77",
+          "SOC" = "orange",
+          "SOC-adjacent resting zone" = "#AA4499")
+
+# Generate spatial factor maps
+label_plots <- setNames(lapply(c("2", "4"), function(i) {
+  
+  # Get meta data and coordinates
+  gg <- subset(gg, sample == i)
+  dims <- GetStaffli(BN)@dims[[i]]
+  
+  # Get H&E image
+  im <- GetStaffli(BN)@rasterlists$processed[[i]]
+  sf <- nrow(im)/dims$height
+  im <- im[limits_list[[i]]["y_start"]:limits_list[[i]]["y_end"]*sf, limits_list[[i]]["x_start"]:limits_list[[i]]["x_end"]*sf]
+  g <- grid::rasterGrob(im, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+  
+  # Create plots
+  p <- ggplot() +
+    annotation_custom(g, -Inf, Inf, -Inf, Inf) +
+    geom_point(data = gg, aes(warped_x, dims$height - warped_y, fill = annotation), 
+               size = 1.5, shape = 21, stroke = 0) +
+    theme_void() +
+    scale_x_continuous(expand = c(0, 0), limits = c(limits_list[[i]]["x_start"], limits_list[[i]]["x_end"])) +
+    scale_y_continuous(expand = c(0, 0), limits = c(dims$height - limits_list[[i]]["y_end"], dims$height - limits_list[[i]]["y_start"])) +
+    scale_fill_manual(values = cols)
+  p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
+    
+  return(p)
+}), nm = c("2", "4"))
+
+```
+
+```{r}
+
+label_plots[["2"]]
+label_plots[["4"]]
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/section_2_labeled.pdf", width = 6, height = 4)
+print(label_plots[["2"]])
+dev.off()
+
+pdf(file = "plots/section_4_labeled.pdf", width = 6, height = 4)
+print(label_plots[["4"]])
+dev.off()
+
+```
+
+Create plot for panel b.
+
+Here we keep genes with an avg_log2FC value > 0.6 and a maximum of 15 genes per zone.
+
+```{r fig.height=8, fig.width=3}
+
+# Filter de markers and select a maximum of 15 genes per zone
+arr_df <- de.markers.bone.annotations %>% 
+  subset(avg_log2FC > 0.6) %>% 
+  mutate(cluster = factor(cluster, levels = c("resting zone", "proliferative zone",
+                                              "pre-Hypertrophic zone", "hypertrophic zone",
+                                              "SOC", "SOC-adjacent resting zone", "articular cartilage"))) %>%
+  group_by(cluster) %>%
+  slice_head(n = 15) %>%
+  arrange(cluster, -avg_log2FC)
+
+# Reorder selected genes
+genes <- arr_df %>%
+  pull(gene) %>% 
+  rev() 
+
+# Set facto levels for annotations
+BN$annotation <- factor(BN$annotation, levels = c("resting zone", "proliferative zone",
+                                              "pre-Hypertrophic zone", "hypertrophic zone",
+                                              "SOC", "SOC-adjacent resting zone", "articular cartilage"))
+BN <- SetIdent(BN, value = "annotation")
+
+# Create dotplot with markers genes
+p_dotplot <- DotPlot(BN, features = unique(genes)) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_color_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "RdBu") %>% rev()) +
+  theme(axis.title = element_blank())
+
+p_dotplot
+
+```
+
+```{r eval=FALSE}
+
+pdf(file = "plots/annotation_markers_dotplot.pdf", width = 6, height = 12)
+print(p_dotplot)
+dev.off()
+
+```
+
+# date
+***
+
+```{r}
+
+date()
+
+```
+
+# Session
+***
+
+```{r}
+
+sessionInfo()
+
+```
+
+

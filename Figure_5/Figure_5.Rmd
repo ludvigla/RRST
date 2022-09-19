@@ -1,5 +1,5 @@
 ---
-title: "Figure 4"
+title: "Figure 5"
 author: "Ludvig Larsson"
 date: '2022-08-17'
 output: html_document
@@ -20,7 +20,18 @@ library(dplyr)
 library(magrittr)
 
 ```
-Download files from Mendeley.
+
+# Download files from Mendeley Data 
+***
+
+Note that you only have to run this code chunk once. If you are having issue downloading files, please make sure that 
+you have a stable internet connection and that Mendeley Data (https://data.mendeley.com/) is up and running.
+
+These files should be downloaded without any issue. If you encounter any errors, some of the code in this 
+notebook will be possible to run.
+
+If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
+put them in a folder called `data/` at the root of the project.
 
 ```{r eval=FALSE}
 
@@ -29,6 +40,7 @@ suppressWarnings({
   dir.create("../data/")
   dir.create("../data/genes/")
   dir.create("../data/sheets/")
+  dir.create("../data/sheets/PBT_pathology/")
   dir.create("../data/spaceranger_output/")
 })
 
@@ -44,6 +56,11 @@ for (i in seq_along(sheets.files)) {
   download.file(url = sheets.files[i], destfile = paste0("../data/sheets/", names(sheets.files)[i]))
 }
 
+# Download PBT pathology annotation files
+for (i in seq_along(PBT.pathology.files)) {
+  download.file(url = PBT.pathology.files[i], destfile = paste0("../data/sheets/PBT_pathology/", names(PBT.pathology.files)[i]))
+}
+
 # Download spaceranger output files
 download.file(url = spaceranger.files[1], destfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[1]))
 untar(tarfile = paste0("../data/spaceranger_output/", names(spaceranger.files)[1]), exdir = "../data/spaceranger_output/")
@@ -55,7 +72,6 @@ Assemble spaceranger output files and merge curated meta data
 
 ```{r}
 
-# Mouse brain
 samples <- Sys.glob(paths = "../data/spaceranger_output/pediatricbraintumor/*/filtered_feature_bc_matrix.h5")
 imgs <- Sys.glob(paths = "../data/spaceranger_output/pediatricbraintumor/*/spatial/tissue_hires_image.png")
 spotfiles <- Sys.glob(paths = "../data/spaceranger_output/pediatricbraintumor/*/spatial/tissue_positions_list.csv")
@@ -239,7 +255,7 @@ Import annotations made by the pathologist
 
 ```{r}
 
-annotations <- Sys.glob(paths = "../../spaceranger_output/pediatricbraintumor/*/Pathology*")
+annotations <- Sys.glob(paths = "../data/sheets/PBT_pathology/*")
 
 ann <- do.call(rbind, lapply(seq_along(annotations), function(i) {
   a <- setNames(read.csv(file = annotations[i]), nm = c("barcode", "type"))
@@ -309,7 +325,7 @@ ST.FeaturePlot(CBT_medulloblastoma, features = "AXIN2", ncol = 4, show.sb = FALS
 ## Figure 5c - Violin plots of marker gene expression
 ***
 
-Visualize the normaized expression of marker genes associated with WNT-signaling.
+Visualize the normalized expression of marker genes associated with WNT-signaling.
 
 ```{r fig.width=12, fig.height=7}
 

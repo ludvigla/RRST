@@ -30,7 +30,9 @@ git clone https://github.com/ludvigla/RRST
 
 You will be asked to provide your github username and password to access the repo. If the authentication fails, 
 you can follow [these](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) 
-simple steps to create a Personal Access Token and use this as the password. 
+simple steps to create a Personal Access Token and use this as the password.
+
+One the RRST GitHub repo has been downloaded, we can navigate into the RRST folder.
 
 ```
 cd RRST

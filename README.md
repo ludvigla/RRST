@@ -12,34 +12,20 @@ was successful, open a terminal window and enter:
 docker ps
 ````
 
-You should be able to execute this command without any issues. 
-
-Next, you need to clone the GitHub repo. First, you need to make sure that you switch to the GitHub user 
-that has access to this repo. You can set the `user.name` and `user.email` with the following commands:
-
-````
-git config --global user.name "Bob"
-git config --global user.email "bob@example.com"
-````
-
-And once we have switched to account with access to this private repo, we can clone the repo:
+Clone, you need to clone the github repo:
 
 ````
 git clone https://github.com/ludvigla/RRST
 ````
 
-You will be asked to provide your github username and password to access the repo. If the authentication fails, 
-you can follow [these](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) 
-simple steps to create a Personal Access Token and use this as the password.
-
-One the RRST GitHub repo has been downloaded, we can navigate into the newly created folder.
+Once the RRST GitHub repo has been downloaded, we can navigate into the newly created folder.
 
 ```
 cd RRST
 ````
 
 Now we can generate a container from the `ludlar/rrst` image. This image contains an environment 
-with an installation of R and all R packages necessary to run the analyses available.
+with an installation of R and all R packages necessary to run the analyses.
 
 Note that you need to be in the correct folder (i.e. the RRST folder cloned from GitHub). You can change 
 `--memory` flag as you see fit, but the code has only been tested with 16GiB of RAM.

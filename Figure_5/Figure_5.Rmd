@@ -31,7 +31,8 @@ These files should be downloaded without any issue. If you encounter any errors,
 notebook will be possible to run.
 
 If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
-put them in a folder called `data/` at the root of the project.
+put them in a folder called `data/` at the root of the project. Here's the link to the Mendeley Data repository: 
+https://data.mendeley.com/datasets/4w6krnywhn
 
 ```{r eval=FALSE}
 

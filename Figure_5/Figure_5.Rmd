@@ -168,6 +168,16 @@ p_violin
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+
+df_PBT_QC <- CBT[[]] |> select(paper_id, nFeature_RNA, protocol, arrayID) |> rename(unique_genes = nFeature_RNA) |> 
+  mutate(replicate = case_when(arrayID %in% c("V10T03-320_C1", "V10T03-322_C1", "V11Y03-081_A1", "V11Y03-081_C1") ~ "Rep1",
+                               TRUE ~ "Rep2"))
+
+openxlsx::write.xlsx(df_PBT_QC, file = "../../submission/source_data/source_data_5a.xlsx", sheetName = "5a")
+```
+
+
 ```{r eval=FALSE}
 
 # Export plot
@@ -217,6 +227,13 @@ plots_HE <- lapply(c("1", "3", "5", "7"), function(i) {
 })
 
 ```
+
+```{r}
+openxlsx::write.xlsx(x = df_subset |> select(nFeature_RNA, arrayID, protocol, paper_id, warped_x, warped_y) |> 
+                       rename(unique_genes = nFeature_RNA), 
+                     file = "../../submission/source_data/source_data_5b.xlsx", sheetName = "5b")
+```
+
 
 Create patchwork for Figure 5b
 
@@ -348,6 +365,18 @@ p_markers
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+df_PBT_markers <- cbind(CBT_medulloblastoma[[]], FetchData(CBT_medulloblastoma, vars = WNT_markers)) |> 
+  reshape2::melt(measure.vars = WNT_markers) |> 
+  select(protocol, arrayID, variable, value) |> 
+  rename(gene = variable, normalized_expression = value) |> 
+  mutate(replicate = case_when(arrayID %in% c("V10T03-320_C1", "V11Y03-081_A1") ~ "Rep1",
+                               TRUE ~ "Rep2"))
+
+openxlsx::write.xlsx(df_PBT_markers, file = "../../submission/source_data/source_data_5c.xlsx", sheetName = "5c")
+```
+
+
 ```{r eval=FALSE}
 
 pdf(file = "plots/violin_markers.pdf", width = 8, height = 5)
@@ -397,6 +426,15 @@ p_pathway <- ggrastr::rasterize(p_pathway, layers = "Point", dpi = 300)
 p_pathway
 
 ```
+
+```{r eval=FALSE, include=FALSE}
+df_pathway <- gg |> select(arrayID, protocol, warped_x, warped_y, pathway1) |> 
+  mutate(replicate = case_when(arrayID %in% c("V10T03-320_C1", "V11Y03-081_A1") ~ "Rep1",
+                               TRUE ~ "Rep2")) |> 
+  rename(WNT_signaling_module_score = pathway1)
+openxlsx::write.xlsx(df_pathway, file = "../../submission/source_data/source_data_5d.xlsx", sheetName = "5d")
+```
+
 
 ```{r eval=FALSE}
 

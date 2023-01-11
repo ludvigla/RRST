@@ -213,6 +213,22 @@ ST.FeaturePlot(LNG.subset, features = "nFeature_RNA", ncol = 3, label.by = "prot
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+
+df_qc_LNG1 <- LNG[[]] |> 
+  select(nFeature_RNA, nCount_RNA, paper_id, filter, protocol) |> 
+  rename(unique_genes = nFeature_RNA, UMIs = nCount_RNA) |> 
+  bind_cols(GetStaffli(LNG)@meta.data |> select(sample, warped_x, warped_y)) |> 
+  filter(paper_id %in% "LNG1")
+
+openxlsx::write.xlsx(df_qc_LNG1 |> select(unique_genes, UMIs, protocol), file = "../../submission/source_data/source_data_2b.xlsx", sheetName = "2b")
+
+openxlsx::write.xlsx(df_qc_LNG1 |> select(unique_genes, warped_x, warped_y), file = "../../submission/source_data/source_data_2c.xlsx", sheetName = "2x")
+
+openxlsx::write.xlsx(df_qc_LNG1 |> select(filter, warped_x, warped_y), file = "../../submission/source_data/source_data_2d.xlsx", sheetName = "2d")
+
+```
+
 
 Split data by protocol and sample
 
@@ -266,6 +282,24 @@ DimPlot(LNGList[[3]]) & ggtitle("LNG2 - RRST") | DimPlot(LNGList[[4]]) & ggtitle
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+
+df_clusters <- LNGList[[1]][[]] |> 
+  bind_cols(GetStaffli(LNGList[[1]])@meta.data |> select(warped_x, warped_y)) |> 
+  bind_cols(FetchData(LNGList[[1]], vars = c("UMAP_1","UMAP_2"))) |> 
+  bind_rows(LNGList[[2]][[]] |> 
+              bind_cols(GetStaffli(LNGList[[2]])@meta.data |> select(warped_x, warped_y)) |> 
+              bind_cols(FetchData(LNGList[[2]], vars = c("UMAP_1","UMAP_2"))))
+
+openxlsx::write.xlsx(df_clusters |> select(UMAP_1, UMAP_2, protocol, seurat_clusters), 
+                     file = "../../submission/source_data/source_data_2e.xlsx", sheetName = "2e")
+
+openxlsx::write.xlsx(df_clusters |> select(warped_x, warped_y, protocol, seurat_clusters), 
+                     file = "../../submission/source_data/source_data_2f.xlsx", sheetName = "2f")
+
+```
+
+
 ## DEA
 ***
 
@@ -309,13 +343,13 @@ saveRDS(de.markers.list, file = "R_objects/de.markers.list")
 ann1 <- c("0" = "AT1-enriched", "1" = "Macrophage-enriched",
          "2" = "AT2-enriched", "3" = "Connective tissue 1", 
          "4" = "Connective tissue 2", "5" = "Connective tissue 3",
-         "6" = "Airway epithelium", "7" = "Megakaryocyte-enriched",
+         "6" = "Airway epithelium", "7" = "Megakaryocyte/platelet-enriched",
          "8" = "Smooth muscle", "9" = "Immune-enriched", 
          "10" = "Glands")
 ann3 <- c("0" = "AT2-enriched", "1" = "Low-quality cluster 1",
           "2" = "Connective tissue 1", "3" = "Connective tissue 2",
-          "4" = "Low-quality cluster 2", "5" = "Connective tissue 3",
-          "6" = "Glands", "7" = "Megakaryocyte-enriched", 
+          "4" = "Low-quality cluster 2", "5" = "Smooth muscle",
+          "6" = "Glands", "7" = "Megakaryocyte/platelet-enriched", 
           "8" = "Airway epithelium")
 
 ```
@@ -342,8 +376,9 @@ plots_vln <- lapply(1:4, function(i) {
     ggplot(aes(paper_id, value, fill = variable)) +
     geom_violin(scale = "width", alpha = 0.7) +
     geom_boxplot(width = 0.3) +
+    scale_y_log10() +
     theme_classic() +
-    facet_wrap(~variable, scales = "free") +
+    facet_wrap(~variable) +
     theme(axis.title = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
           legend.position = "none", axis.text.y = element_text(size = 18, colour = "black"), 
           strip.text = element_text(size = 18))
@@ -441,6 +476,44 @@ plots_dotplot <- lapply(1:4, function(i) {
 })
 
 ```
+
+```{r eval=FALSE, include=FALSE}
+degs <- do.call(rbind, lapply(c(1, 2), function(i) {
+  LNG <- LNGList[[i]]
+  if (i == 1) {
+    LNG$seurat_clusters <- factor(ann1[LNG$seurat_clusters], levels = ann1)
+  }
+  if (i == 2) {
+    LNG$seurat_clusters <- factor(ann3[LNG$seurat_clusters], levels = ann3)
+  }
+  LNG <- Seurat::SetIdent(LNG, value = "seurat_clusters")
+  p <- DotPlot(LNG, features = unique(de.markers.list[[i]] %>% 
+                                          dplyr::mutate(gene_count = table(gene)[gene]) %>%
+                                          dplyr::filter(gene_count == 1) %>%
+                                          dplyr::group_by(cluster) %>%
+                                          dplyr::slice_head(n = 4) %>% 
+                                          dplyr::pull(gene) %>% rev())) +
+    scale_color_gradientn(colours = scico::scico(n = 11, palette = "bam", direction = -1)) +
+    scale_y_discrete(position = "left") +
+    theme(axis.title = element_blank(), axis.text = element_text(size = 14), legend.text = element_text(size = 14), 
+          legend.title = element_text(size = 14), axis.text.x = element_text(angle = 60, hjust = 1, size = 16)) +
+    coord_flip()
+  p$guides$colour$title <- "Avg. Expr."
+  p$guides$size$title <- "Pct. Expr."
+  d <- p$data |> setNames(nm = c("V1", "Pct. Expr.", "gene", "annotation", "Avg. Expr.")) |> 
+                       select(-V1)
+  if (i == 1) {
+    d$protocol <- "RRST"
+  }
+  if (i == 2) {
+    d$protocol <- "standard"
+  }
+  return(d)
+}))
+
+openxlsx::write.xlsx(degs, file = "../../submission/source_data/source_data_2g.xlsx", sheetName = "2g")
+```
+
 
 ### Patchwork for Figure 2 
 ***
@@ -550,6 +623,94 @@ p
 # Export image
 pdf(file = "../Suppl_figures/Suppl_Figure_lung_LNG2_analysis/suppl_figure_lung_LNG2_patchwork.pdf", width = 26, height = 20)
 print(p)
+dev.off()
+
+```
+
+
+### Suppl. figure - lung selected markers
+***
+
+Here we DEGs for clusters annotated as "Airway epithelium", "Glands", "Smooth muscle" and "Megakaryocyte/platelet-enriched" that are shared across conditions. 
+
+```{r fig.width=2, fig.height=4}
+
+selected_annotations <- c("Airway epithelium", "Glands", "Smooth muscle", "Megakaryocyte/platelet-enriched")
+shared_markers <- de.markers.list.025$`RRST_ID:_LNG1` |> 
+  mutate(annotation = ann1[cluster], protocol = "RRST") |> 
+  bind_rows(de.markers.list.025$`standard_ID:_LNG1` |> mutate(annotation = ann3[cluster], protocol = "standard")) |> 
+  filter(annotation %in% selected_annotations) |> 
+  group_by(annotation, gene) |> 
+  mutate(n = n())  |> 
+  filter(n == 2) |> # Make sure that genes are detected with both protocols
+  group_by(annotation, gene) |> 
+  summarize(shared_avg_log2FC = mean(avg_log2FC), pct = paste0(pct.1, collapse = "_")) |> 
+  arrange(annotation, -shared_avg_log2FC) |> 
+  mutate(annotation = factor(annotation, selected_annotations)) |> 
+  group_by(annotation) |> 
+  slice_head(n = 100) |> # Keep maximum 100 genes
+  separate(col = pct, sep = "_", into = c("pct_RRST", "pct_standard")) |> 
+  mutate(across(pct_RRST:pct_standard, ~ as.numeric(.x)))
+
+# Subset data to include selected clusters
+LNG1_RRST <- LNGList[[1]]
+LNG1_RRST$annotation <- ann1[LNG1_RRST$seurat_clusters |> as.character()]
+LNG1_RRST <- SubsetSTData(LNG1_RRST, expression = annotation %in% selected_annotations)
+LNG1_RRST$annotation <- factor(LNG1_RRST$annotation, levels = selected_annotations)
+LNG1_standard <- LNGList[[2]]
+LNG1_standard$annotation <- ann3[LNG1_standard$seurat_clusters |> as.character()]
+LNG1_standard <- SubsetSTData(LNG1_standard, expression = annotation %in% selected_annotations)
+LNG1_standard$annotation <- factor(LNG1_standard$annotation, levels = selected_annotations)
+
+# Merge data
+LNG_tot_all <- MergeSTData(LNG1_RRST, LNG1_standard)
+
+# Keep 100 spots per protocol and annotation
+keep_spots <- LNG_tot_all[[]] |> 
+  rownames_to_column(var = "barcode") |> 
+  select(annotation, protocol, barcode) |> 
+  group_by(annotation, protocol) |> 
+  slice_sample(n = 25) |> 
+  pull(barcode)
+LNG_tot <- SubsetSTData(LNG_tot_all, spots = keep_spots) |> 
+  NormalizeData() |> 
+  ScaleData()
+LNG_tot$annotation <- factor(LNG_tot$annotation, levels = selected_annotations)
+LNG_tot <- SetIdent(LNG_tot, value = "annotation")
+
+# plot DEG heatmap
+p <- DoHeatmap(LNG_tot, features = shared_markers$gene, raster = TRUE, disp.min = -2.5, disp.max = 2.5) +
+  theme(axis.text.y = element_text(size = 5, colour = "black")) +
+  scale_fill_gradientn(colours = RColorBrewer::brewer.pal(n = 11, name = "RdBu") |> rev())
+pdf(file = "../Suppl_figures/Suppl_Figure_lung_markers/DE_heatmap_protocol_comparison.pdf", width = 9, height = 14)
+print(p)
+dev.off()
+
+# Detection rates
+p_det_rate <- ggplot(shared_markers, aes(pct_RRST, pct_standard, 
+                                         color = ifelse(pct_RRST > pct_standard, "RRST", "standard"))) +
+  geom_abline(slope = 1, intercept = 0, linetype = "longdash") +
+  geom_point() +
+  theme_classic() +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(color = "detection rate\nhigher in:") +
+  facet_grid(annotation ~ .) +
+  theme(panel.background = element_rect(colour = "black"))
+
+pdf(file = "../Suppl_figures/Suppl_Figure_lung_markers/det_rate_marker_genes.pdf", height = 8, width = 4)
+print(p_det_rate)
+dev.off()
+
+# Export cluster QC plot
+pdf(file = "../Suppl_figures/Suppl_Figure_lung_markers/unique_genes_clusters.pdf", height = 2.5, width = 7)
+LNG_tot_all[[]] |> 
+  ggplot(aes(annotation, nFeature_RNA, fill = protocol)) +
+  geom_violin(scale = "width", position = "dodge") +
+    geom_point(position=position_jitterdodge(dodge.width=0.9), size = 0.5) +
+    theme_classic() +
+    theme(axis.text.x = element_blank()) +
+    labs(y = "Unique genes", x = "")
 dev.off()
 
 ```

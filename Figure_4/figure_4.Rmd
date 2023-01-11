@@ -250,6 +250,13 @@ p
 
 ```
 
+```{r include=FALSE, eval=FALSE}
+df_biotypes <- gene_attr |> select(time, gene_type, p)
+
+openxlsx::write.xlsx(df_biotypes, file = "../../submission/source_data/source_data_4c.xlsx", sheetName = "4c")
+```
+
+
 ```{r eval=FALSE}
 
 # Export plot
@@ -367,6 +374,11 @@ p
 
 ```
 
+```{r include=FALSE, eval=FALSE}
+openxlsx::write.xlsx(gg |> select(warped_x, warped_y, labels) |> rename(annotation = labels), 
+                     file = "../../submission/source_data/source_data_4a.xlsx", sheetName = "4a")
+```
+
 ```{r eval=FALSE}
 
 # Export plot
@@ -406,6 +418,11 @@ p
 
 ```
 
+```{r include=FALSE, eval=FALSE}
+openxlsx::write.xlsx(x = SI[[]] |> select(time, labels, nFeature_RNA) |> rename(annotation = labels, unique_genes = nFeature_RNA), 
+                     file = "../../submission/source_data/source_data_4b.xlsx", sheetName = "4b")
+```
+
 ```{r eval=FALSE}
 
 # Export plot
@@ -416,22 +433,48 @@ dev.off()
 ```
 
 
-## Normalize data
+## Mean-detection rate relationship in mucosa - Figure 4d
 ***
 
-```{r}
+```{r fig.width=8, fig.height=3}
 
-SISplit <- lapply(levels(SI$time), function(i) {
-  cat(sprintf("Started processing data set %s", i), "\n")
-  SIs <- SubsetSTData(SI, expression = nFeature_RNA > 100)
-  SIs <- SubsetSTData(SIs, expression = time %in% i)
-  SIs <- SIs %>% 
-    NormalizeData()
-  SIs <- SetIdent(SIs, value = "labels")
-  return(SIs)
-})
+umis <- GetAssayData(SI, slot = "counts", assay = "RNA")
+df <- do.call(rbind, lapply(levels(SI$time), function(i) {
+  umis_subset <- umis[, (SI$time %in% i) & (SI$labels %in% "mucosa")]
+  data.frame(det_rate = rowMeans(umis_subset > 0),
+             avg_nCounts = rowMeans(umis_subset)) %>%
+    mutate(time = i)
+})) %>%
+  mutate(time = factor(time, levels = levels(SI$time)))
+
+p <- ggplot(df, aes(det_rate, log10(avg_nCounts))) +
+  geom_point(size = 0.7) +
+  facet_grid(~time) +
+  theme_classic() +
+  scale_x_continuous(breaks = c(0, 0.5, 1)) +
+  theme(panel.grid.major = element_line(linetype = "dashed", color = "lightgray"),
+        panel.grid.minor = element_line(linetype = "dashed", 
+                                        color = rgb(red = 240, 
+                                                    green = 240, 
+                                                    blue = 240, 
+                                                    maxColorValue = 255)),
+        legend.position = "none", 
+        axis.text = element_text(size = 12, colour = "black"),
+        axis.title = element_text(size = 14, colour = "black")) +
+  labs(y = "log10(Avg. gene expression)", x = "Gene detection rate") +
+  guides(color = guide_legend(override.aes = list(size = 5)))
+p <- ggrastr::rasterize(input = p, layers = "Point", dpi = 300, dev = "ragg")
+
+pdf(file = "mean-detection-rate_relationship.pdf", width = 8, height = 3.5)
+p
+dev.off()
 
 ```
+
+```{r eval=FALSE, include=FALSE}
+openxlsx::write.xlsx(x = df |> rownames_to_column(var = "gene"), file = "../../submission/source_data/source_data_4d.xlsx", sheetName = "4d")
+```
+
 
 
 ## DE test
@@ -495,7 +538,7 @@ SI <- NormalizeData(SI)
 enterocyte.markers <- c("ANPEP", "RBP2", "DGAT1", "FABP2", "APOB")
 gg <- cbind(SI[[]], GetStaffli(SI)@meta.data, FetchData(object = SI, vars = enterocyte.markers)) %>%
   tidyr::gather(variable, value, enterocyte.markers) %>%
-  select(arrayID, time, warped_x, warped_y, sample, variable, value)
+  select(arrayID, protocol, time, warped_x, warped_y, sample, variable, value)
 
 # Create spatial maps
 plots <- lapply(enterocyte.markers, function(i) {
@@ -518,6 +561,16 @@ p <- cowplot::plot_grid(plotlist = plots, nrow = 1)
 p
 
 ```
+
+```{r include=FALSE, eval=FALSE}
+df_SI_markers <- gg |> 
+  filter(sample %in% c("2", "5", "13")) |> 
+  rename(gene = variable, normalized_expression = value) |> 
+  select(-sample)
+
+openxlsx::write.xlsx(df_SI_markers, file = "../../submission/source_data/source_data_4e.xlsx", sheetName = "4e")
+```
+
 
 ```{r}
 

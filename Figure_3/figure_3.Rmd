@@ -238,6 +238,24 @@ p4
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+
+df_CLN_qc <- CLN[[]] |> 
+  select(protocol, nFeature_RNA, nCount_RNA, paper_id, labels) |> 
+  bind_cols(GetStaffli(CLN)@meta.data |> select(warped_x, warped_y)) |> 
+  rename(unique_genes = nFeature_RNA, annotation = labels, UMIs = nCount_RNA)
+
+openxlsx::write.xlsx(df_CLN_qc |> select(warped_x, warped_y, protocol, annotation, paper_id), file = "../../submission/source_data/source_data_3a.xlsx", sheetName = "3a")
+
+openxlsx::write.xlsx(df_CLN_qc |> select(warped_x, warped_y, protocol, unique_genes, paper_id), file = "../../submission/source_data/source_data_3b.xlsx", sheetName = "3b")
+
+openxlsx::write.xlsx(df_CLN_qc |> select(protocol, unique_genes, paper_id), file = "../../submission/source_data/source_data_3c.xlsx", sheetName = "3c")
+
+openxlsx::write.xlsx(df_CLN_qc |> select(protocol, UMIs, paper_id), file = "../../submission/source_data/source_data_3d.xlsx", sheetName = "3d")
+
+```
+
+
 ```{r eval=FALSE}
 
 pdf(file = "plots/sample1_HE_unique_genes_RRST.pdf", width = 6.3, height = 3.05)
@@ -458,6 +476,11 @@ p <- ggrastr::rasterize(p, layers = "Point", dpi = 300)
 p
 
 ```
+
+```{r include=FALSE, eval=FALSE}
+openxlsx::write.xlsx(ggs |> rename(gene = variable, detection_rate = det), file = "../../submission/source_data/source_data_3e.xlsx", sheetName = "3e")
+```
+
 
 ```{r eval=FALSE}
 

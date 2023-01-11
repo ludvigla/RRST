@@ -34,7 +34,8 @@ These files should be downloaded without any issue. If you encounter any errors,
 notebook will be possible to run.
 
 If you struggle to download the data from R, you can also download the files manually from Mendeley Data and
-put them in a folder called `data/` at the root of the project.
+put them in a folder called `data/` at the root of the project. Here's the link to the Mendeley Data repository: 
+https://data.mendeley.com/datasets/4w6krnywhn
 
 ```{r eval=FALSE}
 
@@ -72,7 +73,7 @@ Assemble spaceranger output files
 
 
 ```{r}
-
+getwd()
 # Mouse brain
 samples1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/filtered_feature_bc_matrix.h5")
 imgs1 <- Sys.glob(paths = "../data/spaceranger_output/mousebrain/*/spatial/tissue_hires_image.png")
@@ -105,6 +106,9 @@ infoTable <- merge(infoTable, curated_metadata, by = "arrayID")
 
 ```
 
+## Mouse brain
+***
+
 Load mouse brain Visium data (4xRRST + 4xstandard)
 
 ```{r}
@@ -114,6 +118,23 @@ MB_infoTable <- subset(infoTable, source == "mouse brain")
 MB <- InputFromTable(infotable = MB_infoTable)
 
 ```
+
+```{r eval=FALSE, include=FALSE}
+
+df_qc_mousebrain <- MB[[]] |>
+  select(nFeature_RNA, protocol) |> 
+  rename(unique_genes = nFeature_RNA) |> 
+  bind_cols(GetStaffli(MB)@meta.data |> select(sample)) |> 
+  mutate(replicate = case_when(sample %in% c(1, 5) ~ "Rep1",
+                         sample %in% c(2, 6) ~ "Rep2",
+                         sample %in% c(3, 7) ~ "Rep3",
+                         sample %in% c(4, 8) ~ "Rep4")) |> 
+  select(-sample)
+
+openxlsx::write.xlsx(x = df_qc_mousebrain, file = "../../submission/source_data/source_data_1c-mousebrain.xlsx", sheetName = "1c-mousebrain")
+
+```
+
 
 Load H&E images into the `MB` object
 
@@ -144,7 +165,7 @@ MB <- WarpImages(MB, verbose = TRUE, transforms = list("1" = list(angle = 90), "
 ```{r fig.width=8, fig.height=5}
 
 p <- ST.FeaturePlot(MB, features = "nFeature_RNA", ncol = 2, indices = c(1, 5), show.sb = FALSE,
-                    label.by = "protocol",  pt.size = 1.2) &
+                    label.by = "protocol",  pt.size = 1.2, cols = viridis::magma(n = 11, direction = -1)) &
   theme(plot.title = element_blank(), legend.position = "top", 
         legend.text = element_text(angle = 60, hjust = 1, size = 14, colour = "black"),
         legend.title = element_text(size = 18, face = "bold", colour = "black", vjust = 1),
@@ -154,7 +175,21 @@ p
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+
+df_mousebrain <- MB[[]] |> 
+  select(nFeature_RNA, protocol) |> 
+  rename(unique_genes = nFeature_RNA) |> 
+  bind_cols(GetStaffli(MB)@meta.data |> select(warped_x, warped_y, sample)) |> 
+  filter(sample %in% c(1, 5))
+
+openxlsx::write.xlsx(df_mousebrain, file = "../../submission/source_data/source_data_1b_mousebrain.xlsx", sheetName = "1b-mousebrain")
+
+```
+
+
 ```{r eval=FALSE}
+
 jpeg(filename = "plots/mousebrain_unique_genes_spatial.jpg", width = 2200, height = 1400, res = 300)
 print(p)
 dev.off()
@@ -220,6 +255,13 @@ mouse_probes <- read.csv("../data/sheets/Visium_Mouse_Transcriptome_Probe_Set_v1
 mouse_probes$gene_name <- do.call(rbind, strsplit(mouse_probes$probe_id, "\\|"))[, 2]
 
 ```
+
+```{r eval=FALSE, include=FALSE}
+gene_attr_mousebrain <- gene_attr |> 
+  select(RRST_count:standard_det_rate)
+openxlsx::write.xlsx(x = gene_attr_mousebrain, file = "../../submission/source_data/source_data_1d_mousebrain.xlsx", sheetName = "1d-mousebrain")
+```
+
 
 ## d - Gene-gene scatter plot of detection rate and UMI counts [mouse brain]
 ***
@@ -356,12 +398,30 @@ dev.off()
 
 ```
 
+
+## Prostate cancer
+***
+
 Load prostate cancer data (2xRRST and 2xstandard)
 
 ```{r}
 
 PC_infoTable <- subset(infoTable, source == "prostate cancer")
 PC <- InputFromTable(infotable = PC_infoTable[c(3:4, 1:2), ])
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+df_qc_prostatecancer <- PC[[]] |>
+  select(nFeature_RNA, protocol) |> 
+  rename(unique_genes = nFeature_RNA) |> 
+  bind_cols(GetStaffli(PC)@meta.data |> select(sample)) |> 
+  mutate(replicate = case_when(sample %in% c(1, 3) ~ "Rep1",
+                         sample %in% c(2, 4) ~ "Rep2")) |> 
+  select(-sample)
+
+openxlsx::write.xlsx(x = df_qc_prostatecancer, file = "../../submission/source_data/source_data_1c-prostatecancer.xlsx", sheetName = "1c-prostatecancer")
 
 ```
 
@@ -388,7 +448,7 @@ PC <- WarpImages(PC, verbose = TRUE, transforms = list("1" = list(shift.y = -130
 ```{r fig.width=8, fig.height=5}
 
 p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2), 
-                    label.by = "protocol",  pt.size = 1.2, show.sb = FALSE) &
+                    label.by = "protocol",  pt.size = 1.2, show.sb = FALSE, cols = viridis::magma(n = 11, direction = -1)) &
   theme(plot.title = element_blank(), legend.position = "top", 
         legend.text = element_text(angle = 60, hjust = 1, size = 14, colour = "black"),
         legend.title = element_text(size = 18, face = "bold", colour = "black", vjust = 1),
@@ -396,6 +456,18 @@ p <- ST.FeaturePlot(PC, features = "nFeature_RNA", ncol = 2, indices = c(3, 2),
   labs(fill = "unique genes")
 
 p
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+df_prostatecancer <- PC[[]] |> 
+  select(nFeature_RNA, protocol) |> 
+  rename(unique_genes = nFeature_RNA) |> 
+  bind_cols(GetStaffli(PC)@meta.data |> select(warped_x, warped_y, sample)) |> 
+  filter(sample %in% c(3, 2))
+
+openxlsx::write.xlsx(df_prostatecancer, file = "../../submission/source_data/source_data_1b-prostatecancer.xlsx", sheetName = "1b-prostatecancer", overwrite = FALSE)
 
 ```
 
@@ -466,6 +538,12 @@ Subset genes to include those available in the Visium FFPE probe set.
 human_probes <- read.csv("../data/sheets/Visium_Human_Transcriptome_Probe_Set_v1.0_GRCh38-2020-A.csv", skip = 5, header = TRUE)
 human_probes$gene_name <- do.call(rbind, strsplit(human_probes$probe_id, "\\|"))[, 2]
 
+```
+
+```{r eval=FALSE, include=FALSE}
+gene_attr_prostatecancer <- gene_attr |> 
+  select(RRST_count:standard_det_rate)
+openxlsx::write.xlsx(x = gene_attr_prostatecancer, file = "../../submission/source_data/source_data_1d_prostatecancer.xlsx", sheetName = "1d-prostatecancer")
 ```
 
 ## d - Gene-gene scatter plot of detection rate and UMI counts [prostate cancer]
